@@ -16,10 +16,7 @@ pub fn is_tty<T: AsRawHandle>(stream: &T) -> bool {
 pub fn get_tty() -> io::Result<impl Read + Write> {
     let stdin = io::stdin();
     let stdout = io::stdout();
-    Ok(TerminalHandle {
-        stdin,
-        stdout,
-    })
+    Ok(TerminalHandle { stdin, stdout })
 }
 
 struct TerminalHandle {

@@ -9,19 +9,17 @@
 //! use termion::screen::AlternateScreen;
 //! use std::io::{Write, stdout};
 //!
-//! fn main() {
 //!     {
 //!         let mut screen = AlternateScreen::from(stdout());
 //!         write!(screen, "Writing to alternate screen!").unwrap();
 //!         screen.flush().unwrap();
 //!     }
 //!     println!("Writing to main screen.");
-//! }
 //! ```
 
+use std::fmt;
 use std::io::{self, Write};
 use std::ops;
-use std::fmt;
 
 /// Switch to the main screen buffer of the terminal.
 pub struct ToMainScreen;
@@ -56,7 +54,7 @@ impl<W: Write> AlternateScreen<W> {
     /// to the alternate screen.
     pub fn from(mut output: W) -> Self {
         write!(output, "{}", ToAlternateScreen).expect("switch to alternate screen");
-        AlternateScreen { output: output }
+        AlternateScreen { output }
     }
 }
 

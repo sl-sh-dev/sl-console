@@ -15,18 +15,16 @@
 //! use termion::raw::IntoRawMode;
 //! use std::io::{Write, stdout};
 //!
-//! fn main() {
 //!     let mut stdout = stdout().into_raw_mode().unwrap();
 //!
 //!     write!(stdout, "Hey there.").unwrap();
-//! }
 //! ```
 
 use std::io::{self, Write};
 use std::ops;
 
-use sys::attr::{get_terminal_attr, raw_terminal_attr, set_terminal_attr};
-use sys::Termios;
+use crate::sys::attr::{get_terminal_attr, raw_terminal_attr, set_terminal_attr};
+use crate::sys::Termios;
 
 /// The timeout of an escape code control sequence, in milliseconds.
 pub const CONTROL_SEQUENCE_TIMEOUT: u64 = 100;
