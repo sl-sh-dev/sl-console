@@ -40,7 +40,7 @@ jobs:
           rustc --version
           cargo build --verbose
     - name: Run Rust tests
-      run: script -e -c "cargo test --verbose"
+      run: script "cargo test --verbose"
       
   build-windows:
 
