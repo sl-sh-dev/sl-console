@@ -26,7 +26,7 @@ jobs:
           rustc --version
           cargo build --verbose
     - name: Run tests
-      run: script -e -c cargo test --verbose
+      run: script -e -c "cargo test --verbose"
 
   build-macos:
 
