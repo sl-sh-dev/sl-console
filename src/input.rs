@@ -399,7 +399,7 @@ mod test {
     #[test]
     fn test_backspace() {
         line_match(
-            "this is the\x7f first\x7f\x7f test",
+            "ths is the\x7f first\x7f\x7f test",
             Some("this is th fir test"),
         );
         line_match(
