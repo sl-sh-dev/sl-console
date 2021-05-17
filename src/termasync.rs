@@ -129,7 +129,7 @@ impl Read for AsyncReader {
                     total += 1;
                 }
                 Ok(Err(e)) => return Err(e),
-                Err(err) if err == mpsc::TryRecvError::Empty => {
+                Err(err) if err == mpsc::TryRecvError::Empty && total == 0 => {
                     return Err(io::Error::new(io::ErrorKind::WouldBlock, ""))
                 }
                 Err(_) => break,
