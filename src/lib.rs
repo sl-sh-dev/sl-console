@@ -30,7 +30,13 @@ pub use sys::size::terminal_size;
 pub use sys::size::terminal_size_pixels;
 pub use sys::tty::{get_tty, is_tty};
 
+#[cfg(unix)]
+#[path = "termasync_unix.rs"]
 pub mod termasync;
+
+#[cfg(not(unix))]
+pub mod termasync;
+
 pub use termasync::{async_stdin, AsyncReader};
 
 #[macro_use]
