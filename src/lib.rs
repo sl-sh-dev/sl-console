@@ -30,7 +30,7 @@ pub use sys::size::terminal_size;
 pub use sys::size::terminal_size_pixels;
 pub use sys::tty::{get_tty, is_tty};
 
-mod termasync;
+pub mod termasync;
 pub use termasync::{async_stdin, AsyncReader};
 
 #[macro_use]

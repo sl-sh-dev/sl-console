@@ -263,7 +263,7 @@ pub trait DetectColors {
 
 impl<W: Write> DetectColors for W {
     fn available_colors(&mut self) -> io::Result<u16> {
-        let mut stdin = async_stdin();
+        let mut stdin = async_stdin()?;
 
         if detect_color(self, &mut stdin, 0)? {
             // OSC 4 is supported, detect how many colors there are.

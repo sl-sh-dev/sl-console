@@ -165,7 +165,7 @@ pub trait DetectCursorPos {
 impl<W: Write> DetectCursorPos for W {
     fn cursor_pos(&mut self) -> io::Result<(u16, u16)> {
         let delimiter = b'R';
-        let mut stdin = async_stdin_until(delimiter);
+        let mut stdin = async_stdin_until(delimiter)?;
 
         // Where is the cursor?
         // Use `ESC [ 6 n`.

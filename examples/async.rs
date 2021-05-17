@@ -9,7 +9,7 @@ use termion::raw::IntoRawMode;
 fn main() {
     let stdout = stdout();
     let mut stdout = stdout.lock().into_raw_mode().unwrap();
-    let mut stdin = async_stdin().bytes();
+    let mut stdin = async_stdin().unwrap().bytes();
 
     write!(
         stdout,

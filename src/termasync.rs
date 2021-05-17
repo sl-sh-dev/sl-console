@@ -1,18 +1,30 @@
-use std::io::{self, Read};
-use std::sync::mpsc;
-use std::thread;
+//! Support async reading of the tty/console.
 
+#[cfg(unix)]
+use std::fs::{File, OpenOptions};
+use std::io::{self, Read};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+#[cfg(not(unix))]
+use std::sync::mpsc;
+#[cfg(not(unix))]
+use std::thread;
+//use libc::{self, c_int, suseconds_t, timeval};
+
+#[cfg(not(unix))]
 use crate::sys::tty::get_tty;
 
 /// Construct an asynchronous handle to the TTY standard input, with a delimiter byte.
 ///
 /// This has the same advantages as async_stdin(), but also allows specifying a delimiter byte. The
 /// reader will stop reading after consuming the delimiter byte.
-pub fn async_stdin_until(delimiter: u8) -> AsyncReader {
+#[cfg(not(unix))]
+pub fn async_stdin_until(delimiter: u8) -> io::Result<AsyncReader> {
+    let tty = get_tty()?;
     let (send, recv) = mpsc::channel();
 
     thread::spawn(move || {
-        for i in get_tty().unwrap().bytes() {
+        for i in tty.bytes() {
             match i {
                 Ok(byte) => {
                     let end_of_stream = byte == delimiter;
@@ -29,7 +41,15 @@ pub fn async_stdin_until(delimiter: u8) -> AsyncReader {
         }
     });
 
-    AsyncReader { recv }
+    Ok(AsyncReader { recv })
+}
+
+/// Construct an asynchronous handle to the TTY standard input, with a delimiter byte.
+///
+/// This version use non-blocking IO not a thread so is the same as async_stdin.
+#[cfg(unix)]
+pub fn async_stdin_until(_delimiter: u8) -> io::Result<AsyncReader> {
+    async_stdin()
 }
 
 /// Construct an asynchronous handle to the TTY standard input.
@@ -42,18 +62,38 @@ pub fn async_stdin_until(delimiter: u8) -> AsyncReader {
 /// asyncronized from piped input would rarely make sense. In other words, if you pipe standard
 /// output from another process, it won't be reflected in the stream returned by this function, as
 /// this represents the TTY device, and not the piped standard input.
-pub fn async_stdin() -> AsyncReader {
+#[cfg(not(unix))]
+pub fn async_stdin() -> io::Result<AsyncReader> {
+    let tty = get_tty()?;
     let (send, recv) = mpsc::channel();
-
     thread::spawn(move || {
-        for i in get_tty().unwrap().bytes() {
+        for i in tty.bytes() {
             if send.send(i).is_err() {
                 return;
             }
         }
     });
 
-    AsyncReader { recv }
+    Ok(AsyncReader { recv })
+}
+
+/// Construct an asynchronous handle to the TTY standard input.
+///
+/// This allows you to read from standard input _without blocking_ the current thread.
+/// Specifically, it works by opening up the tty device non-blocking.
+///
+/// This will not read the piped standard input, but rather read from the TTY device, since reading
+/// asyncronized from piped input would rarely make sense. In other words, if you pipe standard
+/// output from another process, it won't be reflected in the stream returned by this function, as
+/// this represents the TTY device, and not the piped standard input.
+#[cfg(unix)]
+pub fn async_stdin() -> io::Result<AsyncReader> {
+    let tty = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open("/dev/tty")
+        .unwrap();
+    Ok(AsyncReader { tty })
 }
 
 /// An asynchronous reader.
@@ -62,10 +102,11 @@ pub fn async_stdin() -> AsyncReader {
 /// the buffer will only be partially updated based on how much the internal buffer holds.
 pub struct AsyncReader {
     /// The underlying mpsc receiver.
+    #[cfg(not(unix))]
     recv: mpsc::Receiver<io::Result<u8>>,
+    #[cfg(unix)]
+    tty: File,
 }
-
-// FIXME: Allow constructing an async reader from an arbitrary stream.
 
 impl Read for AsyncReader {
     /// Read from the byte stream.
@@ -73,6 +114,7 @@ impl Read for AsyncReader {
     /// This will never block, but try to drain the event queue until empty. If the total number of
     /// bytes written is lower than the buffer's length, the event queue is empty or that the event
     /// stream halted.
+    #[cfg(not(unix))]
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut total = 0;
 
@@ -93,6 +135,11 @@ impl Read for AsyncReader {
 
         Ok(total)
     }
+
+    #[cfg(unix)]
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.tty.read(buf)
+    }
 }
 
 #[cfg(test)]
@@ -102,7 +149,7 @@ mod test {
 
     #[test]
     fn test_async_stdin() {
-        let stdin = async_stdin();
+        let stdin = async_stdin().unwrap();
         stdin.bytes().next();
     }
 }
