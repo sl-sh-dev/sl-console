@@ -5,6 +5,7 @@ use std::{thread, time};
 use termion::screen::*;
 
 fn main() {
+    termion::set_virtual_terminal().unwrap();
     {
         let mut screen = AlternateScreen::from(stdout());
         write!(screen, "Welcome to the alternate screen.\n\nPlease wait patiently until we arrive back at the main screen in a about three seconds.").unwrap();

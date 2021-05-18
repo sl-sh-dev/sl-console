@@ -28,7 +28,7 @@ mod sys;
 pub use sys::size::terminal_size;
 #[cfg(all(unix, not(target_os = "redox")))]
 pub use sys::size::terminal_size_pixels;
-pub use sys::tty::{get_tty, is_tty};
+pub use sys::tty::{get_tty, is_tty, set_virtual_terminal};
 
 #[cfg(unix)]
 #[path = "termasync_unix.rs"]

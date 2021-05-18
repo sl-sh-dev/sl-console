@@ -11,6 +11,7 @@ fn main() {
         count = term.available_colors().unwrap();
     }
 
+    termion::set_virtual_terminal().unwrap();
     println!("This terminal supports {} colors.", count);
     for i in 0..count {
         print!("{} {}", Bg(AnsiValue(i as u8)), Bg(AnsiValue(0)));

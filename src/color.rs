@@ -312,7 +312,12 @@ fn detect_color(stdout: &mut dyn Write, stdin: &mut dyn Read, color: u16) -> io:
 
     // Either consume all data up to bell or wait for a timeout.
     while buf[0] != bell && now.elapsed().unwrap() < timeout {
-        total_read += stdin.read(&mut buf)?;
+        match stdin.read(&mut buf) {
+            Ok(b) => total_read += b,
+            // Don't error out on a would block- this just means no response since async.
+            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+            Err(err) => return Err(err),
+        }
     }
 
     // If there was a response, the color is supported.

@@ -1,3 +1,4 @@
+use crate::sys::attr::{get_terminal_attr, set_terminal_attr, virt_terminal_attr};
 use std::io::{self, Read, Result, Stdin, Stdout, Write};
 use std::os::windows::io::AsRawHandle;
 
@@ -17,6 +18,18 @@ pub fn get_tty() -> io::Result<impl Read + Write> {
     let stdin = io::stdin();
     let stdout = io::stdout();
     Ok(TerminalHandle { stdin, stdout })
+}
+
+/// Make sure the windows console will handle terminal escape codes.
+///
+/// If you are writing a windows app (or a crossplatform app) and you are NOT
+/// using raw mode then you need to call this to make sure the console will
+/// handle escape codes.  This is a noop on other platforms so is safe to call.
+pub fn set_virtual_terminal() -> io::Result<()> {
+    let mut ios = get_terminal_attr()?;
+    virt_terminal_attr(&mut ios);
+    set_terminal_attr(&ios)?;
+    Ok(())
 }
 
 struct TerminalHandle {

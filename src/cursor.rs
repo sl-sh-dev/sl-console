@@ -180,8 +180,12 @@ impl<W: Write> DetectCursorPos for W {
 
         // Either consume all data up to R or wait for a timeout.
         while buf[0] != delimiter && now.elapsed().unwrap() < timeout {
-            if stdin.read(&mut buf)? > 0 {
-                read_chars.push(buf[0]);
+            match stdin.read(&mut buf) {
+                Ok(b) if b > 0 => read_chars.push(buf[0]),
+                Ok(_) => {}
+                // WouldBlock just means no data yet so keep trying.
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+                Err(err) => return Err(err),
             }
         }
 

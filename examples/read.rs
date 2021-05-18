@@ -4,6 +4,7 @@ use std::io::{stdin, stdout, Write};
 use termion::input::TermRead;
 
 fn main() {
+    termion::set_virtual_terminal().unwrap();
     let stdout = stdout();
     let mut stdout = stdout.lock();
     let stdin = stdin();

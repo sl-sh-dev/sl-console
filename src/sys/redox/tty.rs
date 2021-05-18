@@ -23,3 +23,10 @@ pub fn get_tty() -> io::Result<impl Read + Write> {
     let tty = env::var("TTY").map_err(|x| io::Error::new(io::ErrorKind::NotFound, x))?;
     fs::OpenOptions::new().read(true).write(true).open(tty)
 }
+
+/// Make sure the Windows console will handle terminal escape codes.
+///
+/// This is a noop everywhere but Windows.
+pub fn set_virtual_terminal() -> io::Result<()> {
+    Ok(())
+}

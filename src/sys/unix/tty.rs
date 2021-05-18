@@ -20,3 +20,10 @@ pub fn get_tty() -> io::Result<impl Read + Write> {
         .write(true)
         .open("/dev/tty")
 }
+
+/// Make sure the Windows console will handle terminal escape codes.
+///
+/// This is a noop everywhere but Windows.
+pub fn set_virtual_terminal() -> io::Result<()> {
+    Ok(())
+}
