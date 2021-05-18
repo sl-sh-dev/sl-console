@@ -1,8 +1,11 @@
 //! Support async reading of the tty/console.
 
+use std::cell::RefCell;
 use std::io::{self, Read};
+use std::rc::Rc;
 use std::sync::mpsc;
 use std::thread;
+use std::time::Duration;
 
 use crate::sys::tty::get_tty;
 
@@ -31,8 +34,10 @@ pub fn async_stdin_until(delimiter: u8) -> io::Result<AsyncReader> {
             }
         }
     });
+    let recv = Rc::new(RefCell::new(recv));
+    let next = Rc::new(RefCell::new(None));
 
-    Ok(AsyncReader { recv })
+    Ok(AsyncReader { recv, next })
 }
 
 /// Construct an asynchronous handle to the TTY standard input.
@@ -55,8 +60,10 @@ pub fn async_stdin() -> io::Result<AsyncReader> {
             }
         }
     });
+    let recv = Rc::new(RefCell::new(recv));
+    let next = Rc::new(RefCell::new(None));
 
-    Ok(AsyncReader { recv })
+    Ok(AsyncReader { recv, next })
 }
 
 /// An asynchronous reader.
@@ -65,7 +72,53 @@ pub fn async_stdin() -> io::Result<AsyncReader> {
 /// the buffer will only be partially updated based on how much the internal buffer holds.
 pub struct AsyncReader {
     /// The underlying mpsc receiver.
-    recv: mpsc::Receiver<io::Result<u8>>,
+    recv: Rc<RefCell<mpsc::Receiver<io::Result<u8>>>>,
+    next: Rc<RefCell<Option<io::Result<u8>>>>,
+}
+
+/// A blocker for an asynchronous reader.
+///
+/// This is useful when you need to block waiting on new data withoug a spin
+/// loop or sleeps.
+pub struct AsyncBlocker {
+    recv: Rc<RefCell<mpsc::Receiver<io::Result<u8>>>>,
+    next: Rc<RefCell<Option<io::Result<u8>>>>,
+}
+
+impl AsyncBlocker {
+    /// Block until more data is ready.
+    ///
+    /// Assume this can be interupted.
+    pub fn block(&mut self) {
+        if let Ok(v) = self.recv.borrow().recv() {
+            self.next.borrow_mut().replace(v);
+        }
+    }
+
+    /// Block until more data is ready with a timeout.
+    ///
+    /// Assume this can be interupted.
+    /// Returns true if the block timed out vs more data was ready.
+    pub fn block_timeout(&mut self, timeout: Duration) -> bool {
+        if let Ok(v) = self.recv.borrow().recv_timeout(timeout) {
+            self.next.borrow_mut().replace(v);
+            false
+        } else {
+            true
+        }
+    }
+}
+
+impl AsyncReader {
+    /// Return a blocker struct.
+    ///
+    /// This can be used to block or block with a timeout on the AsyncReader.
+    pub fn blocker(&mut self) -> AsyncBlocker {
+        AsyncBlocker {
+            recv: self.recv.clone(),
+            next: self.next.clone(),
+        }
+    }
 }
 
 impl Read for AsyncReader {
@@ -81,8 +134,17 @@ impl Read for AsyncReader {
             if total >= buf.len() {
                 break;
             }
+            if let Some(v) = self.next.borrow_mut().take() {
+                match v {
+                    Ok(b) => {
+                        buf[total] = b;
+                        total += 1;
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
 
-            match self.recv.try_recv() {
+            match self.recv.borrow().try_recv() {
                 Ok(Ok(b)) => {
                     buf[total] = b;
                     total += 1;

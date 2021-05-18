@@ -37,7 +37,7 @@ pub mod termasync;
 #[cfg(not(unix))]
 pub mod termasync;
 
-pub use termasync::{async_stdin, AsyncReader};
+pub use termasync::{async_stdin, AsyncBlocker, AsyncReader};
 
 #[macro_use]
 mod macros;
