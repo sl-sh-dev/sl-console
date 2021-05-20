@@ -1,17 +1,24 @@
 //! Support async reading of the tty/console.
 
+use lazy_static::lazy_static;
 use libc::{self, timeval};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read};
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
-/// Construct an asynchronous handle to the TTY standard input, with a delimiter byte.
-///
-/// This version use non-blocking IO not a thread so is the same as async_stdin.
-pub fn async_stdin_until(_delimiter: u8) -> io::Result<AsyncReader> {
-    async_stdin()
+fn open_tty() -> File {
+    OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open("/dev/tty")
+        .unwrap()
+}
+
+lazy_static! {
+    static ref INTERNAL_TTY: Mutex<File> = Mutex::new(open_tty());
 }
 
 /// Construct an asynchronous handle to the TTY standard input.
@@ -23,21 +30,18 @@ pub fn async_stdin_until(_delimiter: u8) -> io::Result<AsyncReader> {
 /// asyncronized from piped input would rarely make sense. In other words, if you pipe standard
 /// output from another process, it won't be reflected in the stream returned by this function, as
 /// this represents the TTY device, and not the piped standard input.
-pub fn async_stdin() -> io::Result<AsyncReader> {
-    let tty = OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NONBLOCK)
-        .open("/dev/tty")
-        .unwrap();
-    Ok(AsyncReader { tty })
+pub fn async_stdin<'a>() -> io::Result<AsyncReader<'a>> {
+    Ok(AsyncReader {
+        tty: INTERNAL_TTY.lock().unwrap(),
+    })
 }
 
 /// An asynchronous reader.
 ///
 /// This acts as any other stream, with the exception that reading from it won't block. Instead,
 /// the buffer will only be partially updated based on how much the internal buffer holds.
-pub struct AsyncReader {
-    tty: File,
+pub struct AsyncReader<'a> {
+    tty: MutexGuard<'a, File>,
 }
 
 /// A blocker for an asynchronous reader.
@@ -100,7 +104,7 @@ impl AsyncBlocker {
     }
 }
 
-impl AsyncReader {
+impl<'a> AsyncReader<'a> {
     /// Return a blocker struct.
     ///
     /// This can be used to block or block with a timeout on the AsyncReader.
@@ -110,7 +114,7 @@ impl AsyncReader {
     }
 }
 
-impl Read for AsyncReader {
+impl<'a> Read for AsyncReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.tty.read(buf)
     }

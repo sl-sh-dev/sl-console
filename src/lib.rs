@@ -11,6 +11,9 @@
 //! For more information refer to the [README](https://github.com/redox-os/termion).
 #![warn(missing_docs)]
 
+#[cfg(not(unix))]
+extern crate crossbeam_channel;
+extern crate lazy_static;
 extern crate numtoa;
 
 #[cfg(target_os = "redox")]

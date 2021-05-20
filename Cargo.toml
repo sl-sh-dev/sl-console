@@ -11,7 +11,8 @@ exclude = ["target", "CHANGELOG.md", "image.png", "Cargo.lock"]
 edition = "2018"
 
 [dependencies]
-numtoa = { version = "0.1", features = ["std"]}
+numtoa = "0.2"
+lazy_static = "1.4.0"
 
 [target.'cfg(all(not(target_os = "redox"), not(windows)))'.dependencies]
 libc = "0.2"
@@ -22,3 +23,4 @@ redox_termios = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 crossterm_winapi = "0.8"
+crossbeam-channel = "0.5"

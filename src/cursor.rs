@@ -1,7 +1,7 @@
 //! Cursor movement.
 
 use crate::raw::CONTROL_SEQUENCE_TIMEOUT;
-use crate::termasync::async_stdin_until;
+use crate::termasync::async_stdin;
 use numtoa::NumToA;
 use std::fmt;
 use std::io::{self, Error, ErrorKind, Read, Write};
@@ -165,7 +165,7 @@ pub trait DetectCursorPos {
 impl<W: Write> DetectCursorPos for W {
     fn cursor_pos(&mut self) -> io::Result<(u16, u16)> {
         let delimiter = b'R';
-        let mut stdin = async_stdin_until(delimiter)?;
+        let mut stdin = async_stdin()?;
 
         // Where is the cursor?
         // Use `ESC [ 6 n`.
