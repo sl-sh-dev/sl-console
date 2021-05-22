@@ -11,7 +11,7 @@
 //! ```
 
 use crate::raw::CONTROL_SEQUENCE_TIMEOUT;
-use crate::termasync::async_stdin;
+use crate::Console;
 use numtoa::NumToA;
 use std::env;
 use std::fmt;
@@ -252,20 +252,15 @@ impl<C: Color> fmt::Display for Bg<C> {
     }
 }
 
-/// Types that allow detection of the colors they support.
-pub trait DetectColors {
+impl<'a> Console<'a> {
     /// How many ANSI colors are supported (from 8 to 256)?
     ///
     /// Beware: the information given isn't authoritative, it's infered through escape codes or the
     /// value of `TERM`, more colors may be available.
-    fn available_colors(&mut self) -> io::Result<u16>;
-}
+    pub fn available_colors(&mut self) -> io::Result<u16> {
+        let mut console = self.non_blocking();
 
-impl<W: Write> DetectColors for W {
-    fn available_colors(&mut self) -> io::Result<u16> {
-        let mut stdin = async_stdin()?;
-
-        if detect_color(self, &mut stdin, 0)? {
+        if detect_color(&mut console, 0)? {
             // OSC 4 is supported, detect how many colors there are.
             // Do a binary search of the last supported color.
             let mut min = 8;
@@ -273,7 +268,7 @@ impl<W: Write> DetectColors for W {
             let mut i;
             while min + 1 < max {
                 i = (min + max) / 2;
-                if detect_color(self, &mut stdin, i)? {
+                if detect_color(&mut console, i)? {
                     min = i
                 } else {
                     max = i
@@ -297,11 +292,11 @@ impl<W: Write> DetectColors for W {
 }
 
 /// Detect a color using OSC 4.
-fn detect_color(stdout: &mut dyn Write, stdin: &mut dyn Read, color: u16) -> io::Result<bool> {
+fn detect_color<CON: Read + Write>(console: &mut CON, color: u16) -> io::Result<bool> {
     // Is the color available?
     // Use `ESC ] 4 ; color ; ? BEL`.
-    write!(stdout, "\x1B]4;{};?\x07", color)?;
-    stdout.flush()?;
+    write!(console, "\x1B]4;{};?\x07", color)?;
+    console.flush()?;
 
     let mut buf: [u8; 1] = [0];
     let mut total_read = 0;
@@ -312,7 +307,7 @@ fn detect_color(stdout: &mut dyn Write, stdin: &mut dyn Read, color: u16) -> io:
 
     // Either consume all data up to bell or wait for a timeout.
     while buf[0] != bell && now.elapsed().unwrap() < timeout {
-        match stdin.read(&mut buf) {
+        match console.read(&mut buf) {
             Ok(b) => total_read += b,
             // Don't error out on a would block- this just means no response since async.
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}

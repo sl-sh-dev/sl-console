@@ -1,70 +1,70 @@
-//! Support async reading of the tty/console.
+//! Support access to the tty/console.
 
 use lazy_static::lazy_static;
 use libc::{self, timeval};
 use std::fs::{File, OpenOptions};
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::AsRawFd;
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 fn open_tty() -> File {
     OpenOptions::new()
         .read(true)
+        .write(true)
         .custom_flags(libc::O_NONBLOCK)
         .open("/dev/tty")
         .unwrap()
 }
 
 lazy_static! {
+    // Provide a protected singleton for the tty.  There is only one so try to
+    // enforce that to avoid a myriad of issues.
     static ref INTERNAL_TTY: Mutex<File> = Mutex::new(open_tty());
 }
 
-/// Construct an asynchronous handle to the TTY standard input.
+/// Lock and return the terminal (tty/console) for the application.
 ///
-/// This allows you to read from standard input _without blocking_ the current thread.
-/// Specifically, it works by opening up the tty device non-blocking.
-///
+/// This provides a Read/Write object that is connected to /dev/tty.
 /// This will not read the piped standard input, but rather read from the TTY device, since reading
 /// asyncronized from piped input would rarely make sense. In other words, if you pipe standard
 /// output from another process, it won't be reflected in the stream returned by this function, as
 /// this represents the TTY device, and not the piped standard input.
-pub fn async_stdin<'a>() -> io::Result<AsyncReader<'a>> {
-    Ok(AsyncReader {
+pub fn console<'a>() -> io::Result<Console<'a>> {
+    Ok(Console {
         tty: INTERNAL_TTY.lock().unwrap(),
+        leftover: None,
+        blocking: true,
     })
 }
 
-/// An asynchronous reader.
+/// Represents a tty/console terminal.
 ///
-/// This acts as any other stream, with the exception that reading from it won't block. Instead,
-/// the buffer will only be partially updated based on how much the internal buffer holds.
-pub struct AsyncReader<'a> {
+/// This is a singleton that aquires a lock when grabbed via get_term.  It
+/// should be used to access the tty/terminal to avoid conflicts and other
+/// issues.
+pub struct Console<'a> {
     tty: MutexGuard<'a, File>,
+    pub(crate) leftover: Option<u8>,
+    pub(crate) blocking: bool,
 }
 
-/// A blocker for an asynchronous reader.
-///
-/// This is useful when you need to block waiting on new data withoug a spin
-/// loop or sleeps.
-pub struct AsyncBlocker {
-    tty_fd: RawFd,
-}
-
-impl AsyncBlocker {
-    /// Block until more data is ready.
+impl<'a> Console<'a> {
+    /// Return when more data is avialable.
     ///
+    /// Calls to a get_* function should return a value now.
     /// Assume this can be interupted.
-    pub fn block(&mut self) {
+    pub fn poll(&mut self) {
+        let tty_fd = self.tty.as_raw_fd();
         let mut rfdset = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
         unsafe {
             libc::FD_ZERO(&mut rfdset);
-            libc::FD_SET(self.tty_fd, &mut rfdset);
+            libc::FD_SET(tty_fd, &mut rfdset);
         }
         unsafe {
             libc::select(
-                self.tty_fd + 1,
+                tty_fd + 1,
                 &mut rfdset,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
@@ -73,15 +73,16 @@ impl AsyncBlocker {
         }
     }
 
-    /// Block until more data is ready with a timeout.
+    /// Return more data is ready or the timeout is reached.
     ///
     /// Assume this can be interupted.
-    /// Returns true if the block timed out vs more data was ready.
-    pub fn block_timeout(&mut self, timeout: Duration) -> bool {
+    /// Returns true if the more data was ready, false if timed out.
+    pub fn poll_timeout(&mut self, timeout: Duration) -> bool {
+        let tty_fd = self.tty.as_raw_fd();
         let mut rfdset = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
         unsafe {
             libc::FD_ZERO(&mut rfdset);
-            libc::FD_SET(self.tty_fd, &mut rfdset);
+            libc::FD_SET(tty_fd, &mut rfdset);
         }
         let timeout_us = if timeout.as_micros() < i64::MAX as u128 {
             timeout.as_micros() as i64
@@ -94,40 +95,31 @@ impl AsyncBlocker {
         };
         unsafe {
             libc::select(
-                self.tty_fd + 1,
+                tty_fd + 1,
                 &mut rfdset,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
                 &mut tv,
-            ) == 0
+            ) == 1
         }
     }
 }
 
-impl<'a> AsyncReader<'a> {
-    /// Return a blocker struct.
-    ///
-    /// This can be used to block or block with a timeout on the AsyncReader.
-    pub fn blocker(&mut self) -> AsyncBlocker {
-        let tty_fd = self.tty.as_raw_fd();
-        AsyncBlocker { tty_fd }
-    }
-}
-
-impl<'a> Read for AsyncReader<'a> {
+impl<'a> Read for Console<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.blocking {
+            self.poll();
+        }
         self.tty.read(buf)
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    use std::io::Read;
+impl<'a> Write for Console<'a> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.tty.write(buf)
+    }
 
-    #[test]
-    fn test_async_stdin() {
-        let stdin = async_stdin().unwrap();
-        stdin.bytes().next();
+    fn flush(&mut self) -> io::Result<()> {
+        self.tty.flush()
     }
 }

@@ -5,6 +5,7 @@ use std::io;
 pub use self::libc::termios as Termios;
 
 pub mod attr;
+pub mod console;
 pub mod size;
 pub mod tty;
 

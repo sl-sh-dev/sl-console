@@ -1,7 +1,7 @@
 //! Cursor movement.
 
 use crate::raw::CONTROL_SEQUENCE_TIMEOUT;
-use crate::termasync::async_stdin;
+use crate::Console;
 use numtoa::NumToA;
 use std::fmt;
 use std::io::{self, Error, ErrorKind, Read, Write};
@@ -156,21 +156,16 @@ impl fmt::Display for Down {
     }
 }
 
-/// Types that allow detection of the cursor position.
-pub trait DetectCursorPos {
+impl<'a> Console<'a> {
     /// Get the (1,1)-based cursor position from the terminal.
-    fn cursor_pos(&mut self) -> io::Result<(u16, u16)>;
-}
-
-impl<W: Write> DetectCursorPos for W {
-    fn cursor_pos(&mut self) -> io::Result<(u16, u16)> {
+    pub fn cursor_pos(&mut self) -> io::Result<(u16, u16)> {
         let delimiter = b'R';
-        let mut stdin = async_stdin()?;
+        let mut console = self.non_blocking();
 
         // Where is the cursor?
         // Use `ESC [ 6 n`.
-        write!(self, "\x1B[6n")?;
-        self.flush()?;
+        write!(console, "\x1B[6n")?;
+        console.flush()?;
 
         let mut buf: [u8; 1] = [0];
         let mut read_chars = Vec::new();
@@ -180,7 +175,7 @@ impl<W: Write> DetectCursorPos for W {
 
         // Either consume all data up to R or wait for a timeout.
         while buf[0] != delimiter && now.elapsed().unwrap() < timeout {
-            match stdin.read(&mut buf) {
+            match console.read(&mut buf) {
                 Ok(b) if b > 0 => read_chars.push(buf[0]),
                 Ok(_) => {}
                 // WouldBlock just means no data yet so keep trying.

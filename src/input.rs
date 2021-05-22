@@ -1,4 +1,4 @@
-//! User input.
+//! User input
 
 use std::io::{self, Read, Write};
 use std::ops;
@@ -41,6 +41,47 @@ impl<R: Read> Iterator for Events<R> {
     }
 }
 
+/// Get the next input event and the bytes that define it.
+pub(crate) fn event_and_raw(
+    source: &mut dyn Read,
+    leftover: &mut Option<u8>,
+) -> Option<Result<(Event, Vec<u8>), io::Error>> {
+    if let Some(c) = leftover {
+        // we have a leftover byte, use it
+        let ch = *c;
+        drop(c);
+        *leftover = None;
+        return Some(parse_event(ch, &mut source.bytes()));
+    }
+
+    // Here we read two bytes at a time. We need to distinguish between single ESC key presses,
+    // and escape sequences (which start with ESC or a x1B byte). The idea is that if this is
+    // an escape sequence, we will read multiple bytes (the first byte being ESC) but if this
+    // is a single ESC keypress, we will only read a single byte.
+    let mut buf = [0u8; 2];
+    let res = match source.read(&mut buf) {
+        Ok(0) => return None,
+        Ok(1) => match buf[0] {
+            b'\x1B' => Ok((Event::Key(Key::Esc), vec![b'\x1B'])),
+            c => parse_event(c, &mut source.bytes()),
+        },
+        Ok(2) => {
+            let option_iter = &mut Some(buf[1]).into_iter();
+            let result = {
+                let mut iter = option_iter.map(Ok).chain(source.bytes());
+                parse_event(buf[0], &mut iter)
+            };
+            // If the option_iter wasn't consumed, keep the byte for later.
+            *leftover = option_iter.next();
+            result
+        }
+        Ok(_) => unreachable!(),
+        Err(e) => Err(e),
+    };
+
+    Some(res)
+}
+
 /// An iterator over input events and the bytes that define them.
 pub struct EventsAndRaw<R> {
     source: R,
@@ -51,40 +92,7 @@ impl<R: Read> Iterator for EventsAndRaw<R> {
     type Item = Result<(Event, Vec<u8>), io::Error>;
 
     fn next(&mut self) -> Option<Result<(Event, Vec<u8>), io::Error>> {
-        let source = &mut self.source;
-
-        if let Some(c) = self.leftover {
-            // we have a leftover byte, use it
-            self.leftover = None;
-            return Some(parse_event(c, &mut source.bytes()));
-        }
-
-        // Here we read two bytes at a time. We need to distinguish between single ESC key presses,
-        // and escape sequences (which start with ESC or a x1B byte). The idea is that if this is
-        // an escape sequence, we will read multiple bytes (the first byte being ESC) but if this
-        // is a single ESC keypress, we will only read a single byte.
-        let mut buf = [0u8; 2];
-        let res = match source.read(&mut buf) {
-            Ok(0) => return None,
-            Ok(1) => match buf[0] {
-                b'\x1B' => Ok((Event::Key(Key::Esc), vec![b'\x1B'])),
-                c => parse_event(c, &mut source.bytes()),
-            },
-            Ok(2) => {
-                let option_iter = &mut Some(buf[1]).into_iter();
-                let result = {
-                    let mut iter = option_iter.map(Ok).chain(source.bytes());
-                    parse_event(buf[0], &mut iter)
-                };
-                // If the option_iter wasn't consumed, keep the byte for later.
-                self.leftover = option_iter.next();
-                result
-            }
-            Ok(_) => unreachable!(),
-            Err(e) => Err(e),
-        };
-
-        Some(res)
+        event_and_raw(&mut self.source, &mut self.leftover)
     }
 }
 

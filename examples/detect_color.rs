@@ -1,13 +1,11 @@
 extern crate termion;
 
-use std::io::stdout;
-use termion::color::{AnsiValue, Bg, DetectColors};
-use termion::raw::IntoRawMode;
+use termion::color::{AnsiValue, Bg};
 
 fn main() {
     let count;
     {
-        let mut term = stdout().into_raw_mode().unwrap();
+        let mut term = termion::console().unwrap();
         count = term.available_colors().unwrap();
     }
 

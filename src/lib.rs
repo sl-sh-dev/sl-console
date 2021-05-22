@@ -11,8 +11,6 @@
 //! For more information refer to the [README](https://github.com/redox-os/termion).
 #![warn(missing_docs)]
 
-#[cfg(not(unix))]
-extern crate crossbeam_channel;
 extern crate lazy_static;
 extern crate numtoa;
 
@@ -25,27 +23,22 @@ mod sys;
 mod sys;
 
 #[cfg(windows)]
+extern crate crossbeam_channel;
+#[cfg(windows)]
 #[path = "sys/windows/mod.rs"]
 mod sys;
 
+pub use sys::console::{console, Console};
 pub use sys::size::terminal_size;
 #[cfg(all(unix, not(target_os = "redox")))]
 pub use sys::size::terminal_size_pixels;
 pub use sys::tty::{get_tty, is_tty, set_virtual_terminal};
 
-#[cfg(unix)]
-#[path = "termasync_unix.rs"]
-pub mod termasync;
-
-#[cfg(not(unix))]
-pub mod termasync;
-
-pub use termasync::{async_stdin, AsyncBlocker, AsyncReader};
-
 #[macro_use]
 mod macros;
 pub mod clear;
 pub mod color;
+pub mod console;
 pub mod cursor;
 pub mod event;
 pub mod input;

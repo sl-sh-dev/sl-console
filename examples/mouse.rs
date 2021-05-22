@@ -1,13 +1,14 @@
 extern crate termion;
 
 use std::io::{self, Write};
-use termion::cursor::{self, DetectCursorPos};
+use termion::console;
+use termion::cursor;
 use termion::event::*;
-use termion::input::{MouseTerminal, TermRead};
+use termion::input::MouseTerminal;
 use termion::raw::IntoRawMode;
 
 fn main() {
-    let stdin = io::stdin();
+    let mut console = console().unwrap();
     let mut stdout = MouseTerminal::from(io::stdout().into_raw_mode().unwrap());
 
     writeln!(
@@ -18,14 +19,15 @@ fn main() {
     )
     .unwrap();
 
-    for c in stdin.events() {
+    loop {
+        let c = console.get_event();
         let evt = c.unwrap();
         match evt {
             Event::Key(Key::Char('q')) => break,
             Event::Mouse(me) => match me {
                 MouseEvent::Press(_, a, b) | MouseEvent::Release(a, b) | MouseEvent::Hold(a, b) => {
                     write!(stdout, "{}", cursor::Goto(a, b)).unwrap();
-                    let (x, y) = stdout.cursor_pos().unwrap();
+                    let (x, y) = console.cursor_pos().unwrap();
                     write!(
                         stdout,
                         "{}{}Cursor is at: ({},{}){}",

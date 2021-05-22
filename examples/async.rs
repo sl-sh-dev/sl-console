@@ -3,13 +3,15 @@ extern crate termion;
 use std::io::{stdout, Read, Write};
 use std::thread;
 use std::time::Duration;
-use termion::async_stdin;
+use termion::console;
 use termion::raw::IntoRawMode;
 
 fn main() {
     let stdout = stdout();
     let mut stdout = stdout.lock().into_raw_mode().unwrap();
-    let mut stdin = async_stdin().unwrap().bytes();
+    let mut stdin = console().unwrap();
+    stdin.set_blocking(false);
+    let mut stdin = stdin.bytes();
 
     write!(
         stdout,
