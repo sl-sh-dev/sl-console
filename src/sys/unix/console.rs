@@ -1,7 +1,7 @@
 //! Support access to the tty/console.
 
 use lazy_static::lazy_static;
-use libc::{self, timeval};
+use libc::{self, suseconds_t, timeval};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
@@ -110,10 +110,10 @@ impl<'a> SysConsole<'a> {
             libc::FD_ZERO(&mut rfdset);
             libc::FD_SET(tty_fd, &mut rfdset);
         }
-        let timeout_us = if timeout.as_micros() < i64::MAX as u128 {
-            timeout.as_micros() as i64
+        let timeout_us = if timeout.as_micros() < suseconds_t::MAX as u128 {
+            timeout.as_micros() as suseconds_t
         } else {
-            i64::MAX
+            suseconds_t::MAX
         };
         let mut tv = timeval {
             tv_sec: 0,
