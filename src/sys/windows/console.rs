@@ -8,13 +8,17 @@ use std::time::Duration;
 use crossbeam_channel::*;
 use lazy_static::lazy_static;
 
+use super::Termios;
+use crate::sys::attr::{get_terminal_attr, raw_terminal_attr, set_terminal_attr};
 use crate::sys::tty::{get_tty, set_virtual_terminal};
 
 type Internals = Receiver<io::Result<u8>>;
 
 fn setup_tty() -> Internals {
     //let stdin = io::stdin();
-    set_virtual_terminal();
+    if let Err(err) = set_virtual_terminal() {
+        panic!("Virtual terminal not supported! {}", err);
+    }
     //let stdout = io::stdout();
     //if let Ok(tty) = get_tty() {
     let (send, recv) = unbounded();
@@ -47,11 +51,10 @@ lazy_static! {
 /// asyncronized from piped input would rarely make sense. In other words, if you pipe standard
 /// output from another process, it won't be reflected in the stream returned by this function, as
 /// this represents the TTY device, and not the piped standard input.
-pub fn console<'a>() -> io::Result<Console<'a>> {
-    Ok(Console {
+pub fn sys_console<'a>() -> io::Result<SysConsole<'a>> {
+    Ok(SysConsole {
         recv: INTERNAL_TTY.lock().unwrap(),
-        leftover: None,
-        blocking: true,
+        prev_ios: None,
     })
 }
 
@@ -59,14 +62,38 @@ pub fn console<'a>() -> io::Result<Console<'a>> {
 ///
 /// This acts as any other stream, with the exception that reading from it won't block. Instead,
 /// the buffer will only be partially updated based on how much the internal buffer holds.
-pub struct Console<'a> {
+pub struct SysConsole<'a> {
     /// The underlying receiver.
     recv: MutexGuard<'a, Receiver<io::Result<u8>>>,
-    pub(crate) leftover: Option<u8>,
-    pub(crate) blocking: bool,
+    prev_ios: Option<Termios>,
 }
 
-impl<'a> Console<'a> {
+impl<'a> Drop for SysConsole<'a> {
+    fn drop(&mut self) {
+        if self.suspend_raw_mode().is_err() {}
+    }
+}
+
+impl<'a> SysConsole<'a> {
+    /// Temporarily switch to original mode
+    pub fn suspend_raw_mode(&self) -> io::Result<()> {
+        if let Some(prev_ios) = self.prev_ios {
+            set_terminal_attr(&prev_ios)?;
+        }
+        Ok(())
+    }
+
+    /// Temporarily switch to raw mode
+    pub fn activate_raw_mode(&mut self) -> io::Result<()> {
+        let mut ios = get_terminal_attr()?;
+        raw_terminal_attr(&mut ios);
+        set_terminal_attr(&ios)?;
+        if self.prev_ios.is_none() {
+            self.prev_ios = Some(ios);
+        }
+        Ok(())
+    }
+
     /// Return when more data is avialable.
     ///
     /// Calls to a get_* function should return a value now.
@@ -88,16 +115,13 @@ impl<'a> Console<'a> {
     }
 }
 
-impl<'a> Read for Console<'a> {
+impl<'a> Read for SysConsole<'a> {
     /// Read from the byte stream.
     ///
     /// This will never block, but try to drain the event queue until empty. If the total number of
     /// bytes written is lower than the buffer's length, the event queue is empty or that the event
     /// stream halted.
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.blocking {
-            self.poll();
-        }
         let mut total = 0;
 
         loop {
@@ -122,7 +146,7 @@ impl<'a> Read for Console<'a> {
     }
 }
 
-impl<'a> Write for Console<'a> {
+impl<'a> Write for SysConsole<'a> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         //self.tty.write(buf)
         io::stdout().write(buf)

@@ -10,8 +10,8 @@
 //!     println!("{}Back again", color::Fg(color::Reset));
 //! ```
 
+use crate::console::*;
 use crate::raw::CONTROL_SEQUENCE_TIMEOUT;
-use crate::Console;
 use numtoa::NumToA;
 use std::env;
 use std::fmt;
@@ -258,7 +258,7 @@ impl<'a> Console<'a> {
     /// Beware: the information given isn't authoritative, it's infered through escape codes or the
     /// value of `TERM`, more colors may be available.
     pub fn available_colors(&mut self) -> io::Result<u16> {
-        let mut console = self.non_blocking();
+        let mut console = NonBlockingRef::from(self);
 
         if detect_color(&mut console, 0)? {
             // OSC 4 is supported, detect how many colors there are.
@@ -292,7 +292,8 @@ impl<'a> Console<'a> {
 }
 
 /// Detect a color using OSC 4.
-fn detect_color<CON: Read + Write>(console: &mut CON, color: u16) -> io::Result<bool> {
+//fn detect_color<CON: Read + Write>(console: &mut CON, color: u16) -> io::Result<bool> {
+fn detect_color(console: &mut Console, color: u16) -> io::Result<bool> {
     // Is the color available?
     // Use `ESC ] 4 ; color ; ? BEL`.
     write!(console, "\x1B]4;{};?\x07", color)?;

@@ -1,35 +1,39 @@
 extern crate termion;
 
-use std::io::{stdin, stdout, Write};
+use std::io::Write;
+use termion::console::*;
 use termion::event::{Event, Key, MouseEvent};
-use termion::input::{MouseTerminal, TermRead};
-use termion::raw::IntoRawMode;
+use termion::input::MouseTerminal;
 
 fn main() {
-    let stdin = stdin();
-    let mut stdout = MouseTerminal::from(stdout().into_raw_mode().unwrap());
+    let console = console().unwrap();
+    let mut console = MouseTerminal::from(console);
 
     write!(
-        stdout,
+        console,
         "{}{}q to exit. Click, click, click!",
         termion::clear::All,
         termion::cursor::Goto(1, 1)
     )
     .unwrap();
-    stdout.flush().unwrap();
+    console.flush().unwrap();
 
-    for c in stdin.events() {
+    //for c in console.events() {
+    loop {
+        let c = console.get_event();
         let evt = c.unwrap();
         match evt {
             Event::Key(Key::Char('q')) => break,
             Event::Mouse(me) => match me {
                 MouseEvent::Press(_, x, y) => {
-                    write!(stdout, "{}x", termion::cursor::Goto(x, y)).unwrap();
+                    write!(console, "{}x", termion::cursor::Goto(x, y)).unwrap();
+                    //print!("{}x", termion::cursor::Goto(x, y));
                 }
                 _ => (),
             },
             _ => {}
         }
-        stdout.flush().unwrap();
+        //stdout().flush().unwrap();
+        console.flush().unwrap();
     }
 }

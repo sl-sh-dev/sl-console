@@ -28,7 +28,7 @@ extern crate crossbeam_channel;
 #[path = "sys/windows/mod.rs"]
 mod sys;
 
-pub use sys::console::{console, Console};
+pub use console::{console, Console};
 pub use sys::size::terminal_size;
 #[cfg(all(unix, not(target_os = "redox")))]
 pub use sys::size::terminal_size_pixels;

@@ -39,9 +39,7 @@ jobs:
           cargo version
           rustc --version
           cargo build --verbose
-    - name: Run Rust tests
-      run: script "cargo test --verbose"
-      
+
   build-windows:
 
     runs-on: windows-latest
@@ -53,5 +51,3 @@ jobs:
           cargo version
           rustc --version
           cargo build --verbose
-    - name: Run Rust tests
-      run: cargo test --verbose

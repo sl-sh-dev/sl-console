@@ -3,6 +3,7 @@
 use std::io::{self, Read, Write};
 use std::ops;
 
+use crate::console::ConMark;
 use crate::event::{self, Event, Key};
 use crate::raw::IntoRawMode;
 
@@ -49,7 +50,6 @@ pub(crate) fn event_and_raw(
     if let Some(c) = leftover {
         // we have a leftover byte, use it
         let ch = *c;
-        drop(c);
         *leftover = None;
         return Some(parse_event(ch, &mut source.bytes()));
     }
@@ -116,6 +116,11 @@ where
 
 /// Extension to `Read` trait.
 pub trait TermRead {
+    /// An iterator over input events and the bytes that define them.
+    fn events_and_raw(self) -> EventsAndRaw<Self>
+    where
+        Self: Sized;
+
     /// An iterator over input events.
     fn events(self) -> Events<Self>
     where
@@ -142,7 +147,13 @@ pub trait TermRead {
     }
 }
 
-impl<R: Read + TermReadEventsAndRaw> TermRead for R {
+impl<R: Read> TermRead for R {
+    fn events_and_raw(self) -> EventsAndRaw<Self> {
+        EventsAndRaw {
+            source: self,
+            leftover: None,
+        }
+    }
     fn events(self) -> Events<Self> {
         Events {
             inner: self.events_and_raw(),
@@ -175,23 +186,6 @@ impl<R: Read + TermReadEventsAndRaw> TermRead for R {
     }
 }
 
-/// Extension to `TermRead` trait. A separate trait in order to maintain backwards compatibility.
-pub trait TermReadEventsAndRaw {
-    /// An iterator over input events and the bytes that define them.
-    fn events_and_raw(self) -> EventsAndRaw<Self>
-    where
-        Self: Sized;
-}
-
-impl<R: Read> TermReadEventsAndRaw for R {
-    fn events_and_raw(self) -> EventsAndRaw<Self> {
-        EventsAndRaw {
-            source: self,
-            leftover: None,
-        }
-    }
-}
-
 /// A sequence of escape codes to enable terminal mouse support.
 const ENTER_MOUSE_SEQUENCE: &str = csi!("?1000h\x1b[?1002h\x1b[?1015h\x1b[?1006h");
 
@@ -201,11 +195,11 @@ const EXIT_MOUSE_SEQUENCE: &str = csi!("?1006l\x1b[?1015l\x1b[?1002l\x1b[?1000l"
 /// A terminal with added mouse support.
 ///
 /// This can be obtained through the `From` implementations.
-pub struct MouseTerminal<W: Write> {
+pub struct MouseTerminal<W: ConMark> {
     term: W,
 }
 
-impl<W: Write> From<W> for MouseTerminal<W> {
+impl<W: ConMark> From<W> for MouseTerminal<W> {
     fn from(mut from: W) -> MouseTerminal<W> {
         from.write_all(ENTER_MOUSE_SEQUENCE.as_bytes()).unwrap();
 
@@ -213,13 +207,13 @@ impl<W: Write> From<W> for MouseTerminal<W> {
     }
 }
 
-impl<W: Write> Drop for MouseTerminal<W> {
+impl<W: ConMark> Drop for MouseTerminal<W> {
     fn drop(&mut self) {
         self.term.write_all(EXIT_MOUSE_SEQUENCE.as_bytes()).unwrap();
     }
 }
 
-impl<W: Write> ops::Deref for MouseTerminal<W> {
+impl<W: ConMark> ops::Deref for MouseTerminal<W> {
     type Target = W;
 
     fn deref(&self) -> &W {
@@ -227,13 +221,29 @@ impl<W: Write> ops::Deref for MouseTerminal<W> {
     }
 }
 
-impl<W: Write> ops::DerefMut for MouseTerminal<W> {
+impl<W: ConMark> ops::DerefMut for MouseTerminal<W> {
     fn deref_mut(&mut self) -> &mut W {
         &mut self.term
     }
 }
 
-impl<W: Write> Write for MouseTerminal<W> {
+impl<W: ConMark> ConMark for MouseTerminal<W> {
+    fn set_blocking(&mut self, blocking: bool) {
+        self.term.set_blocking(blocking);
+    }
+
+    fn is_blocking(&self) -> bool {
+        self.term.is_blocking()
+    }
+}
+
+impl<W: ConMark> Read for MouseTerminal<W> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.term.read(buf)
+    }
+}
+
+impl<W: ConMark> Write for MouseTerminal<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.term.write(buf)
     }

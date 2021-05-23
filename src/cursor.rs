@@ -1,7 +1,7 @@
 //! Cursor movement.
 
+use crate::console::*;
 use crate::raw::CONTROL_SEQUENCE_TIMEOUT;
-use crate::Console;
 use numtoa::NumToA;
 use std::fmt;
 use std::io::{self, Error, ErrorKind, Read, Write};
@@ -160,7 +160,8 @@ impl<'a> Console<'a> {
     /// Get the (1,1)-based cursor position from the terminal.
     pub fn cursor_pos(&mut self) -> io::Result<(u16, u16)> {
         let delimiter = b'R';
-        let mut console = self.non_blocking();
+        //let mut _non_block_console = self.non_blocking();
+        let mut console = NonBlockingRef::from(self);
 
         // Where is the cursor?
         // Use `ESC [ 6 n`.
@@ -201,7 +202,6 @@ impl<'a> Console<'a> {
 
         let cy = nums.next().unwrap().parse::<u16>().unwrap();
         let cx = nums.next().unwrap().parse::<u16>().unwrap();
-
         Ok((cx, cy))
     }
 }

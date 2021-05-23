@@ -1,18 +1,17 @@
 extern crate termion;
 
-use std::io::{self, Write};
-use termion::console;
+use std::io::Write;
+use termion::console::*;
 use termion::cursor;
 use termion::event::*;
 use termion::input::MouseTerminal;
-use termion::raw::IntoRawMode;
 
 fn main() {
-    let mut console = console().unwrap();
-    let mut stdout = MouseTerminal::from(io::stdout().into_raw_mode().unwrap());
+    let console = console().unwrap();
+    let mut console = MouseTerminal::from(console);
 
     writeln!(
-        stdout,
+        console,
         "{}{}q to exit. Type stuff, use alt, click around...",
         termion::clear::All,
         termion::cursor::Goto(1, 1)
@@ -26,10 +25,10 @@ fn main() {
             Event::Key(Key::Char('q')) => break,
             Event::Mouse(me) => match me {
                 MouseEvent::Press(_, a, b) | MouseEvent::Release(a, b) | MouseEvent::Hold(a, b) => {
-                    write!(stdout, "{}", cursor::Goto(a, b)).unwrap();
+                    write!(console, "{}", cursor::Goto(a, b)).unwrap();
                     let (x, y) = console.cursor_pos().unwrap();
                     write!(
-                        stdout,
+                        console,
                         "{}{}Cursor is at: ({},{}){}",
                         cursor::Goto(5, 5),
                         termion::clear::UntilNewline,
@@ -43,6 +42,6 @@ fn main() {
             _ => {}
         }
 
-        stdout.flush().unwrap();
+        console.flush().unwrap();
     }
 }
