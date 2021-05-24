@@ -16,7 +16,7 @@ use numtoa::NumToA;
 use std::env;
 use std::fmt;
 use std::fmt::Debug;
-use std::io::{self, Read, Write};
+use std::io;
 use std::time::{Duration, SystemTime};
 
 /// A terminal color.
@@ -252,48 +252,57 @@ impl<C: Color> fmt::Display for Bg<C> {
     }
 }
 
-impl<'a> Console<'a> {
+/// Extension to `Console` trait for getting available colors.
+pub trait AvailableColors {
     /// How many ANSI colors are supported (from 8 to 256)?
     ///
     /// Beware: the information given isn't authoritative, it's infered through escape codes or the
     /// value of `TERM`, more colors may be available.
-    pub fn available_colors(&mut self) -> io::Result<u16> {
-        let mut console = NonBlockingRef::from(self);
+    fn available_colors(&mut self) -> io::Result<u16>;
+}
 
-        if detect_color(&mut console, 0)? {
-            // OSC 4 is supported, detect how many colors there are.
-            // Do a binary search of the last supported color.
-            let mut min = 8;
-            let mut max = 256;
-            let mut i;
-            while min + 1 < max {
-                i = (min + max) / 2;
-                if detect_color(&mut console, i)? {
-                    min = i
-                } else {
-                    max = i
-                }
-            }
-            Ok(max)
-        } else {
-            // OSC 4 is not supported, trust TERM contents.
-            Ok(match env::var_os("TERM") {
-                Some(val) => {
-                    if val.to_str().unwrap_or("").contains("256color") {
-                        256
+impl<C: Console> AvailableColors for C {
+    fn available_colors(&mut self) -> io::Result<u16> {
+        fn available_colors_inner(console: &mut dyn Console) -> io::Result<u16> {
+            if detect_color(console, 0)? {
+                // OSC 4 is supported, detect how many colors there are.
+                // Do a binary search of the last supported color.
+                let mut min = 8;
+                let mut max = 256;
+                let mut i;
+                while min + 1 < max {
+                    i = (min + max) / 2;
+                    if detect_color(console, i)? {
+                        min = i
                     } else {
-                        8
+                        max = i
                     }
                 }
-                None => 8,
-            })
+                Ok(max)
+            } else {
+                // OSC 4 is not supported, trust TERM contents.
+                Ok(match env::var_os("TERM") {
+                    Some(val) => {
+                        if val.to_str().unwrap_or("").contains("256color") {
+                            256
+                        } else {
+                            8
+                        }
+                    }
+                    None => 8,
+                })
+            }
         }
+        let old_blocking = self.is_blocking();
+        self.set_blocking(false);
+        let res = available_colors_inner(self);
+        self.set_blocking(old_blocking);
+        res
     }
 }
 
 /// Detect a color using OSC 4.
-//fn detect_color<CON: Read + Write>(console: &mut CON, color: u16) -> io::Result<bool> {
-fn detect_color(console: &mut Console, color: u16) -> io::Result<bool> {
+fn detect_color(console: &mut dyn Console, color: u16) -> io::Result<bool> {
     // Is the color available?
     // Use `ESC ] 4 ; color ; ? BEL`.
     write!(console, "\x1B]4;{};?\x07", color)?;

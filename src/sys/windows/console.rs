@@ -12,13 +12,11 @@ use super::Termios;
 use crate::sys::attr::{get_terminal_attr, raw_terminal_attr, set_terminal_attr};
 use crate::sys::tty::{get_tty, set_virtual_terminal};
 
-type Internals = Receiver<io::Result<u8>>;
+type Internals = io::Result<Mutex<Receiver<io::Result<u8>>>>;
 
 fn setup_tty() -> Internals {
     //let stdin = io::stdin();
-    if let Err(err) = set_virtual_terminal() {
-        panic!("Virtual terminal not supported! {}", err);
-    }
+    set_virtual_terminal()?;
     //let stdout = io::stdout();
     //if let Ok(tty) = get_tty() {
     let (send, recv) = unbounded();
@@ -29,7 +27,7 @@ fn setup_tty() -> Internals {
             }
         }
     });
-    recv
+    Ok(Mutex::new(recv))
     //} else {
     //    panic!("No tty!");
     //}
@@ -38,7 +36,8 @@ fn setup_tty() -> Internals {
 lazy_static! {
     // Provide a protected singleton for the tty.  There is only one so try to
     // enforce that to avoid a myriad of issues.
-    static ref INTERNAL_TTY: Mutex<Internals> = Mutex::new(setup_tty());
+    //static ref INTERNAL_TTY: Mutex<Internals> = Mutex::new(setup_tty());
+    static ref INTERNAL_TTY: Internals = setup_tty();
 }
 
 /// Construct an asynchronous handle to the TTY standard input.
@@ -52,10 +51,13 @@ lazy_static! {
 /// output from another process, it won't be reflected in the stream returned by this function, as
 /// this represents the TTY device, and not the piped standard input.
 pub fn sys_console<'a>() -> io::Result<SysConsole<'a>> {
-    Ok(SysConsole {
-        recv: INTERNAL_TTY.lock().unwrap(),
-        prev_ios: None,
-    })
+    match &*INTERNAL_TTY {
+        Ok(recv) => Ok(SysConsole {
+            recv: recv.lock().unwrap(),
+            prev_ios: None,
+        }),
+        Err(err) => Err(io::Error::new(err.kind(), err)),
+    }
 }
 
 /// An asynchronous reader.

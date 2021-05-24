@@ -12,19 +12,19 @@ use std::time::Duration;
 use super::Termios;
 use crate::sys::attr::{get_terminal_attr_fd, raw_terminal_attr, set_terminal_attr_fd};
 
-fn open_tty() -> File {
-    OpenOptions::new()
+fn open_tty() -> io::Result<Mutex<File>> {
+    let tty = OpenOptions::new()
         .read(true)
         .write(true)
         .custom_flags(libc::O_NONBLOCK)
-        .open("/dev/tty")
-        .unwrap()
+        .open("/dev/tty")?;
+    Ok(Mutex::new(tty))
 }
 
 lazy_static! {
     // Provide a protected singleton for the tty.  There is only one so try to
     // enforce that to avoid a myriad of issues.
-    static ref INTERNAL_TTY: Mutex<File> = Mutex::new(open_tty());
+    static ref INTERNAL_TTY: io::Result<Mutex<File>> = open_tty();
 }
 
 /// Lock and return the system specific part of the tty/console for the application.
@@ -35,10 +35,13 @@ lazy_static! {
 /// output from another process, it won't be reflected in the stream returned by this function, as
 /// this represents the TTY device, and not the piped standard input.
 pub fn sys_console<'a>() -> io::Result<SysConsole<'a>> {
-    Ok(SysConsole {
-        tty: INTERNAL_TTY.lock().unwrap(),
-        prev_ios: None,
-    })
+    match &*INTERNAL_TTY {
+        Ok(tty) => Ok(SysConsole {
+            tty: tty.lock().unwrap(),
+            prev_ios: None,
+        }),
+        Err(err) => Err(io::Error::new(err.kind(), err)),
+    }
 }
 
 /// Represents system specific part of a tty/console terminal.
@@ -87,8 +90,6 @@ impl<'a> SysConsole<'a> {
         unsafe {
             libc::FD_ZERO(&mut rfdset);
             libc::FD_SET(tty_fd, &mut rfdset);
-        }
-        unsafe {
             libc::select(
                 tty_fd + 1,
                 &mut rfdset,

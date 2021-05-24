@@ -4,7 +4,7 @@ use crate::console::*;
 use crate::raw::CONTROL_SEQUENCE_TIMEOUT;
 use numtoa::NumToA;
 use std::fmt;
-use std::io::{self, Error, ErrorKind, Read, Write};
+use std::io::{self, Error, ErrorKind, Write};
 use std::ops;
 use std::time::{Duration, SystemTime};
 
@@ -156,53 +156,63 @@ impl fmt::Display for Down {
     }
 }
 
-impl<'a> Console<'a> {
+/// Extension to `Console` trait for getting current cursor position.
+pub trait CursorPos {
     /// Get the (1,1)-based cursor position from the terminal.
-    pub fn cursor_pos(&mut self) -> io::Result<(u16, u16)> {
-        let delimiter = b'R';
-        //let mut _non_block_console = self.non_blocking();
-        let mut console = NonBlockingRef::from(self);
+    fn cursor_pos(&mut self) -> io::Result<(u16, u16)>;
+}
 
-        // Where is the cursor?
-        // Use `ESC [ 6 n`.
-        write!(console, "\x1B[6n")?;
-        console.flush()?;
+impl<C: Console> CursorPos for C {
+    fn cursor_pos(&mut self) -> io::Result<(u16, u16)> {
+        fn cursor_pos_inner(console: &mut dyn Console) -> io::Result<(u16, u16)> {
+            let delimiter = b'R';
 
-        let mut buf: [u8; 1] = [0];
-        let mut read_chars = Vec::new();
+            // Where is the cursor?
+            // Use `ESC [ 6 n`.
+            write!(console, "\x1B[6n")?;
+            console.flush()?;
 
-        let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT);
-        let now = SystemTime::now();
+            let mut buf: [u8; 1] = [0];
+            let mut read_chars = Vec::new();
 
-        // Either consume all data up to R or wait for a timeout.
-        while buf[0] != delimiter && now.elapsed().unwrap() < timeout {
-            match console.read(&mut buf) {
-                Ok(b) if b > 0 => read_chars.push(buf[0]),
-                Ok(_) => {}
-                // WouldBlock just means no data yet so keep trying.
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-                Err(err) => return Err(err),
+            let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT);
+            let now = SystemTime::now();
+
+            // Either consume all data up to R or wait for a timeout.
+            while buf[0] != delimiter && now.elapsed().unwrap() < timeout {
+                match console.read(&mut buf) {
+                    Ok(b) if b > 0 => read_chars.push(buf[0]),
+                    Ok(_) => {}
+                    // WouldBlock just means no data yet so keep trying.
+                    Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+                    Err(err) => return Err(err),
+                }
             }
+
+            if read_chars.is_empty() {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Cursor position detection timed out.",
+                ));
+            }
+
+            // The answer will look like `ESC [ Cy ; Cx R`.
+
+            read_chars.pop(); // remove trailing R.
+            let read_str = String::from_utf8(read_chars).unwrap();
+            let beg = read_str.rfind('[').unwrap();
+            let coords: String = read_str.chars().skip(beg + 1).collect();
+            let mut nums = coords.split(';');
+
+            let cy = nums.next().unwrap().parse::<u16>().unwrap();
+            let cx = nums.next().unwrap().parse::<u16>().unwrap();
+            Ok((cx, cy))
         }
-
-        if read_chars.is_empty() {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "Cursor position detection timed out.",
-            ));
-        }
-
-        // The answer will look like `ESC [ Cy ; Cx R`.
-
-        read_chars.pop(); // remove trailing R.
-        let read_str = String::from_utf8(read_chars).unwrap();
-        let beg = read_str.rfind('[').unwrap();
-        let coords: String = read_str.chars().skip(beg + 1).collect();
-        let mut nums = coords.split(';');
-
-        let cy = nums.next().unwrap().parse::<u16>().unwrap();
-        let cx = nums.next().unwrap().parse::<u16>().unwrap();
-        Ok((cx, cy))
+        let old_blocking = self.is_blocking();
+        self.set_blocking(false);
+        let res = cursor_pos_inner(self);
+        self.set_blocking(old_blocking);
+        res
     }
 }
 

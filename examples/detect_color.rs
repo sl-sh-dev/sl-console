@@ -1,7 +1,7 @@
 extern crate termion;
 
 use std::io::*;
-use termion::color::{AnsiValue, Bg};
+use termion::color::{AnsiValue, AvailableColors, Bg};
 
 fn main() {
     let mut term = termion::console().unwrap();

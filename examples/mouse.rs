@@ -2,7 +2,7 @@ extern crate termion;
 
 use std::io::Write;
 use termion::console::*;
-use termion::cursor;
+use termion::cursor::{self, CursorPos};
 use termion::event::*;
 use termion::input::MouseTerminal;
 
