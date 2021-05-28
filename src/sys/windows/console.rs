@@ -13,10 +13,11 @@ use crate::sys::tty::set_virtual_terminal;
 
 /// Open and return the read side of a console.
 pub fn open_syscon_in() -> io::Result<SysConsoleIn> {
+    let tty = OpenOptions::new().write(true).open("CONIN$")?;
     set_virtual_terminal()?;
     let (send, recv) = unbounded();
     thread::spawn(move || {
-        for i in io::stdin().bytes() {
+        for i in tty.bytes() {
             if send.send(i).is_err() {
                 return;
             }
