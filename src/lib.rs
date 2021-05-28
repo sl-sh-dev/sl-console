@@ -13,6 +13,7 @@
 
 extern crate lazy_static;
 extern crate numtoa;
+extern crate parking_lot;
 
 #[cfg(target_os = "redox")]
 #[path = "sys/redox/mod.rs"]
@@ -28,7 +29,7 @@ extern crate crossbeam_channel;
 #[path = "sys/windows/mod.rs"]
 mod sys;
 
-pub use console::{console, Console};
+pub use console::{conin, conout, ConsoleRead, ConsoleWrite};
 pub use sys::size::terminal_size;
 #[cfg(all(unix, not(target_os = "redox")))]
 pub use sys::size::terminal_size_pixels;

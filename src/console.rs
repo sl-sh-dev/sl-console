@@ -1,68 +1,77 @@
 //! Support access to the tty/console.
 
+use std::cell::RefCell;
 use std::io::{self, Read, Write};
 use std::time::Duration;
+
+use lazy_static::lazy_static;
+use parking_lot::*;
 
 use crate::event::{Event, Key};
 use crate::input::event_and_raw;
 use crate::sys::console::*;
 
-/// Lock and return the tty/console for the application.
+fn make_tty_in() -> io::Result<ReentrantMutex<RefCell<ConsoleIn>>> {
+    let syscon = open_syscon_in()?;
+    Ok(ReentrantMutex::new(RefCell::new(ConsoleIn {
+        syscon,
+        leftover: None,
+        blocking: true,
+    })))
+}
+
+fn make_tty_out() -> io::Result<ReentrantMutex<RefCell<ConsoleOut>>> {
+    let mut syscon = open_syscon_out()?;
+    syscon.activate_raw_mode()?;
+    Ok(ReentrantMutex::new(RefCell::new(ConsoleOut { syscon })))
+}
+
+lazy_static! {
+    // Provide a protected singletons for the console.  There is only one so
+    // try to enforce that to avoid a myriad of issues (split into in and out).
+    static ref CONSOLE_IN: io::Result<ReentrantMutex<RefCell<ConsoleIn>>> = make_tty_in();
+    static ref CONSOLE_OUT: io::Result<ReentrantMutex<RefCell<ConsoleOut>>> = make_tty_out();
+}
+
+/// Lock and return read side of the tty/console for the application.
 ///
-/// This provides a Read/Write object that is connected to /dev/tty (unix) or
+/// This provides a Read object that is connected to /dev/tty (unix) or
 /// the console (windows).  This will not read the piped standard input, but
 /// rather read from the TTY or console device, since reading asyncronized
 /// from piped input would rarely make sense. In other words, if you pipe
 /// standard output from another process, it won't be reflected in the stream
 /// returned by this function, as this represents the TTY/console device, and
 /// not the piped standard input.
-pub fn console<'a>() -> io::Result<ConsoleImpl<'a>> {
-    let mut syscon = sys_console()?;
-    syscon.activate_raw_mode()?;
-    Ok(ConsoleImpl {
-        syscon,
-        leftover: None,
-        blocking: true,
-    })
-}
-/*
-pub struct Blocking<CON: ConMark> {
-    console: CON,
-    old_blocking: bool,
-}
-
-impl<CON: ConMark> From<CON> for Blocking<CON> {
-    fn from(mut from: CON) -> Blocking<CON> {
-        let old_blocking = from.is_blocking();
-        from.set_blocking(true);
-        Blocking { console: from, old_blocking }
+pub fn conin<'a>() -> io::Result<ConsoleInLock<'a>> {
+    match &*CONSOLE_IN {
+        Ok(conin) => Ok(ConsoleInLock {
+            inner: conin.lock(),
+        }),
+        Err(err) => Err(io::Error::new(err.kind(), err)),
     }
 }
 
-impl<CON: ConMark> Drop for Blocking<CON> {
-    fn drop(&mut self) {
-        self.console.set_blocking(self.old_blocking);
+/// Lock and return write side of the tty/console for the application.
+///
+/// This provides a Write object that is connected to /dev/tty (unix) or
+/// the console (windows).  This will not write to standard output (if it is
+/// not the tty/console), but rather write to the TTY or console device.
+/// In other words, if you pipe standard output to another process things you
+/// write to conout() will not go into the pipe but will go to the terminal.
+pub fn conout<'a>() -> io::Result<ConsoleOutLock<'a>> {
+    match &*CONSOLE_OUT {
+        Ok(conout) => Ok(ConsoleOutLock {
+            inner: conout.lock(),
+        }),
+        Err(err) => Err(io::Error::new(err.kind(), err)),
     }
 }
 
-impl<CON: ConMark> ops::Deref for Blocking<CON> {
-    type Target = CON;
+/// Console output trait.
+pub trait ConsoleWrite: Write {}
 
-    fn deref(&self) -> &CON {
-        &self.console
-    }
-}
-
-impl<CON: ConMark> ops::DerefMut for Blocking<CON> {
-    fn deref_mut(&mut self) -> &mut CON {
-        &mut self.console
-    }
-}
-*/
-
-/// Mark then console so it can be distinguished from other random Read + Write
-/// things.
-pub trait Console: Read + Write {
+/// Console input trait.
+pub trait ConsoleRead: Read {
     /// Set whether the console is blocking or non-blocking.
     ///
     /// Default is blocking.  If non blocking then the get_* functions can
@@ -102,18 +111,37 @@ pub trait Console: Read + Write {
     fn poll_timeout(&mut self, timeout: Duration) -> bool;
 }
 
-/// Represents a tty/console terminal.
+/// Represents the input side of the tty/console terminal.
 ///
-/// This is a singleton that aquires a lock when grabbed via get_term.  It
-/// should be used to access the tty/terminal to avoid conflicts and other
-/// issues.
-pub struct ConsoleImpl<'a> {
-    syscon: SysConsole<'a>,
+/// This is a singleton that aquires a lock to access the console (similiar to
+/// Stdin).  It should be used to access the tty/terminal to avoid conflicts
+/// and other issues.
+pub struct ConsoleIn {
+    syscon: SysConsoleIn,
     leftover: Option<u8>,
     blocking: bool,
 }
 
-impl<'a> Console for ConsoleImpl<'a> {
+/// A locked console input device.
+pub struct ConsoleInLock<'a> {
+    inner: ReentrantMutexGuard<'a, RefCell<ConsoleIn>>,
+}
+
+/// Represents the output side of the tty/console terminal.
+///
+/// This is a singleton that aquires a lock to access the console (similiar to
+/// Stdin).  It should be used to access the tty/terminal to avoid conflicts
+/// and other issues.
+pub struct ConsoleOut {
+    syscon: SysConsoleOut,
+}
+
+/// A locked console output device.
+pub struct ConsoleOutLock<'a> {
+    inner: ReentrantMutexGuard<'a, RefCell<ConsoleOut>>,
+}
+
+impl ConsoleRead for ConsoleIn {
     fn set_blocking(&mut self, blocking: bool) {
         self.blocking = blocking;
     }
@@ -160,7 +188,7 @@ impl<'a> Console for ConsoleImpl<'a> {
     }
 }
 
-impl<'a> Read for ConsoleImpl<'a> {
+impl Read for ConsoleIn {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.blocking {
             self.syscon.poll();
@@ -169,13 +197,83 @@ impl<'a> Read for ConsoleImpl<'a> {
     }
 }
 
-impl<'a> Write for ConsoleImpl<'a> {
+impl<'a> ConsoleRead for ConsoleInLock<'a> {
+    fn set_blocking(&mut self, blocking: bool) {
+        self.inner.borrow_mut().blocking = blocking;
+    }
+
+    fn is_blocking(&self) -> bool {
+        self.inner.borrow().blocking
+    }
+
+    fn get_event_and_raw(&mut self) -> io::Result<(Event, Vec<u8>)> {
+        let mut leftover = self.inner.borrow_mut().leftover.take();
+        if let Some(er) = event_and_raw(self, &mut leftover) {
+            er
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "Event stream would block",
+            ))
+        }
+    }
+
+    fn get_event(&mut self) -> io::Result<Event> {
+        match self.get_event_and_raw() {
+            Ok((event, _raw)) => Ok(event),
+            Err(err) => Err(err),
+        }
+    }
+
+    fn get_key(&mut self) -> io::Result<Key> {
+        loop {
+            match self.get_event() {
+                Ok(Event::Key(k)) => return Ok(k),
+                Ok(_) => continue,
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    fn poll(&mut self) {
+        self.inner.borrow_mut().poll();
+    }
+
+    fn poll_timeout(&mut self, timeout: Duration) -> bool {
+        self.inner.borrow_mut().poll_timeout(timeout)
+    }
+}
+
+impl<'a> Read for ConsoleInLock<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.inner.borrow().blocking {
+            self.inner.borrow_mut().poll();
+        }
+        self.inner.borrow_mut().read(buf)
+    }
+}
+
+impl ConsoleWrite for ConsoleOut {}
+
+impl Write for ConsoleOut {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.syscon.write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
         self.syscon.flush()
+    }
+}
+
+impl<'a> ConsoleWrite for ConsoleOutLock<'a> {}
+
+impl<'a> Write for ConsoleOutLock<'a> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.inner.borrow_mut().write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.borrow_mut().flush()
     }
 }
 
@@ -186,7 +284,7 @@ mod test {
 
     #[test]
     fn test_async_stdin() {
-        let mut tty = console().unwrap();
+        let mut tty = conin().unwrap();
         tty.set_blocking(false);
         tty.bytes().next();
     }

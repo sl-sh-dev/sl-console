@@ -2,9 +2,8 @@
 
 use std::io::{self, Read, Write};
 use std::ops;
-use std::time::Duration;
 
-use crate::console::Console;
+use crate::console::ConsoleWrite;
 use crate::event::{self, Event, Key};
 use crate::raw::IntoRawMode;
 
@@ -196,11 +195,11 @@ const EXIT_MOUSE_SEQUENCE: &str = csi!("?1006l\x1b[?1015l\x1b[?1002l\x1b[?1000l"
 /// A terminal with added mouse support.
 ///
 /// This can be obtained through the `From` implementations.
-pub struct MouseTerminal<W: Console> {
+pub struct MouseTerminal<W: ConsoleWrite> {
     term: W,
 }
 
-impl<W: Console> From<W> for MouseTerminal<W> {
+impl<W: ConsoleWrite> From<W> for MouseTerminal<W> {
     fn from(mut from: W) -> MouseTerminal<W> {
         from.write_all(ENTER_MOUSE_SEQUENCE.as_bytes()).unwrap();
 
@@ -208,13 +207,13 @@ impl<W: Console> From<W> for MouseTerminal<W> {
     }
 }
 
-impl<W: Console> Drop for MouseTerminal<W> {
+impl<W: ConsoleWrite> Drop for MouseTerminal<W> {
     fn drop(&mut self) {
         self.term.write_all(EXIT_MOUSE_SEQUENCE.as_bytes()).unwrap();
     }
 }
 
-impl<W: Console> ops::Deref for MouseTerminal<W> {
+impl<W: ConsoleWrite> ops::Deref for MouseTerminal<W> {
     type Target = W;
 
     fn deref(&self) -> &W {
@@ -222,49 +221,13 @@ impl<W: Console> ops::Deref for MouseTerminal<W> {
     }
 }
 
-impl<W: Console> ops::DerefMut for MouseTerminal<W> {
+impl<W: ConsoleWrite> ops::DerefMut for MouseTerminal<W> {
     fn deref_mut(&mut self) -> &mut W {
         &mut self.term
     }
 }
 
-impl<W: Console> Console for MouseTerminal<W> {
-    fn set_blocking(&mut self, blocking: bool) {
-        self.term.set_blocking(blocking);
-    }
-
-    fn is_blocking(&self) -> bool {
-        self.term.is_blocking()
-    }
-
-    fn get_event_and_raw(&mut self) -> io::Result<(Event, Vec<u8>)> {
-        self.term.get_event_and_raw()
-    }
-
-    fn get_event(&mut self) -> io::Result<Event> {
-        self.term.get_event()
-    }
-
-    fn get_key(&mut self) -> io::Result<Key> {
-        self.term.get_key()
-    }
-
-    fn poll(&mut self) {
-        self.term.poll();
-    }
-
-    fn poll_timeout(&mut self, timeout: Duration) -> bool {
-        self.term.poll_timeout(timeout)
-    }
-}
-
-impl<W: Console> Read for MouseTerminal<W> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.term.read(buf)
-    }
-}
-
-impl<W: Console> Write for MouseTerminal<W> {
+impl<W: ConsoleWrite> Write for MouseTerminal<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.term.write(buf)
     }

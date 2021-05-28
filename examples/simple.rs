@@ -1,8 +1,8 @@
 extern crate sl_console;
 
-use std::io::{stdin, stdout, Read, Write};
 use sl_console::color;
 use sl_console::raw::IntoRawMode;
+use std::io::{stdin, stdout, Read, Write};
 
 fn main() {
     // Initialize 'em all.

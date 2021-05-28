@@ -1,7 +1,7 @@
 extern crate sl_console;
 
-use std::{thread, time};
 use sl_console::{clear, color, cursor};
+use std::{thread, time};
 
 fn main() {
     sl_console::set_virtual_terminal().unwrap();

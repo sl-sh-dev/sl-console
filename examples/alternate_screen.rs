@@ -1,8 +1,8 @@
 extern crate sl_console;
 
+use sl_console::screen::*;
 use std::io::{stdout, Write};
 use std::{thread, time};
-use sl_console::screen::*;
 
 fn main() {
     sl_console::set_virtual_terminal().unwrap();

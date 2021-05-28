@@ -162,15 +162,16 @@ pub trait CursorPos {
     fn cursor_pos(&mut self) -> io::Result<(u16, u16)>;
 }
 
-impl<C: Console> CursorPos for C {
+impl<C: ConsoleRead> CursorPos for C {
     fn cursor_pos(&mut self) -> io::Result<(u16, u16)> {
-        fn cursor_pos_inner(console: &mut dyn Console) -> io::Result<(u16, u16)> {
+        fn cursor_pos_inner(conin: &mut dyn ConsoleRead) -> io::Result<(u16, u16)> {
             let delimiter = b'R';
 
+            let mut conout = conout()?;
             // Where is the cursor?
             // Use `ESC [ 6 n`.
-            write!(console, "\x1B[6n")?;
-            console.flush()?;
+            write!(conout, "\x1B[6n")?;
+            conout.flush()?;
 
             let mut buf: [u8; 1] = [0];
             let mut read_chars = Vec::new();
@@ -180,7 +181,7 @@ impl<C: Console> CursorPos for C {
 
             // Either consume all data up to R or wait for a timeout.
             while buf[0] != delimiter && now.elapsed().unwrap() < timeout {
-                match console.read(&mut buf) {
+                match conin.read(&mut buf) {
                     Ok(b) if b > 0 => read_chars.push(buf[0]),
                     Ok(_) => {}
                     // WouldBlock just means no data yet so keep trying.

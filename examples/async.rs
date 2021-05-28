@@ -1,17 +1,18 @@
 extern crate sl_console;
 
+use sl_console::console::*;
+use sl_console::event::*;
 use std::io::{self, Write};
 use std::thread;
 use std::time::Duration;
-use sl_console::console::*;
-use sl_console::event::*;
 
 fn main() {
-    let mut console = console().unwrap();
-    console.set_blocking(false); // Console to async read.
+    let mut conin = conin().unwrap();
+    conin.set_blocking(false); // Console to async read.
+    let mut conout = conout().unwrap();
 
     write!(
-        console,
+        conout,
         "{}{}",
         sl_console::clear::All,
         sl_console::cursor::Goto(1, 1)
@@ -19,14 +20,14 @@ fn main() {
     .unwrap();
 
     loop {
-        let evt = console.get_event();
+        let evt = conin.get_event();
 
-        write!(console, "{}", sl_console::clear::CurrentLine).unwrap();
-        write!(console, "\r{:?}    <- This demonstrates the async read input char. Between each update a 100 ms. is waited, simply to demonstrate the async fashion. \n\r", evt).unwrap();
+        write!(conout, "{}", sl_console::clear::CurrentLine).unwrap();
+        write!(conout, "\r{:?}    <- This demonstrates the async read input char. Between each update a 100 ms. is waited, simply to demonstrate the async fashion. \n\r", evt).unwrap();
         match evt {
             Ok(evt) => match evt {
                 Event::Key(Key::Char('q')) => break,
-                Event::Key(Key::Char('b')) => console.set_blocking(!console.is_blocking()),
+                Event::Key(Key::Char('b')) => conin.set_blocking(!conin.is_blocking()),
                 _ => {}
             },
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
@@ -35,14 +36,14 @@ fn main() {
             Err(err) => panic!("Got BAD error {}", err),
         }
 
-        console.flush().unwrap();
+        conout.flush().unwrap();
 
         thread::sleep(Duration::from_millis(50));
-        console.write_all(b"# ").unwrap();
-        console.flush().unwrap();
+        conout.write_all(b"# ").unwrap();
+        conout.flush().unwrap();
         thread::sleep(Duration::from_millis(50));
-        console.write_all(b"\r #").unwrap();
-        write!(console, "{}", sl_console::cursor::Goto(1, 1)).unwrap();
-        console.flush().unwrap();
+        conout.write_all(b"\r #").unwrap();
+        write!(conout, "{}", sl_console::cursor::Goto(1, 1)).unwrap();
+        conout.flush().unwrap();
     }
 }

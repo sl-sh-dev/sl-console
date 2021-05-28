@@ -13,6 +13,8 @@ edition = "2018"
 [dependencies]
 numtoa = "0.2"
 lazy_static = "1.4.0"
+parking_lot = "0.11"
+scopeguard = "1.1.0"
 
 [target.'cfg(all(not(target_os = "redox"), not(windows)))'.dependencies]
 libc = "0.2"

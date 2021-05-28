@@ -1,65 +1,46 @@
 //! Support access to the tty/console.
 
-use lazy_static::lazy_static;
 use libc::{self, suseconds_t, timeval};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::AsRawFd;
-use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 use super::Termios;
 use crate::sys::attr::{get_terminal_attr_fd, raw_terminal_attr, set_terminal_attr_fd};
 
-fn open_tty() -> io::Result<Mutex<File>> {
+/// Open and return the read side of a tty.
+pub fn open_syscon_in() -> io::Result<SysConsoleIn> {
     let tty = OpenOptions::new()
         .read(true)
-        .write(true)
         .custom_flags(libc::O_NONBLOCK)
         .open("/dev/tty")?;
-    Ok(Mutex::new(tty))
+    Ok(SysConsoleIn { tty })
 }
 
-lazy_static! {
-    // Provide a protected singleton for the tty.  There is only one so try to
-    // enforce that to avoid a myriad of issues.
-    static ref INTERNAL_TTY: io::Result<Mutex<File>> = open_tty();
+/// Open and return the write side of a tty.
+pub fn open_syscon_out() -> io::Result<SysConsoleOut> {
+    let tty = OpenOptions::new().write(true).open("/dev/tty")?;
+    Ok(SysConsoleOut {
+        tty,
+        prev_ios: None,
+    })
 }
 
-/// Lock and return the system specific part of the tty/console for the application.
-///
-/// This provides a Read/Write object that is connected to /dev/tty.
-/// This will not read the piped standard input, but rather read from the TTY device, since reading
-/// asyncronized from piped input would rarely make sense. In other words, if you pipe standard
-/// output from another process, it won't be reflected in the stream returned by this function, as
-/// this represents the TTY device, and not the piped standard input.
-pub fn sys_console<'a>() -> io::Result<SysConsole<'a>> {
-    match &*INTERNAL_TTY {
-        Ok(tty) => Ok(SysConsole {
-            tty: tty.lock().unwrap(),
-            prev_ios: None,
-        }),
-        Err(err) => Err(io::Error::new(err.kind(), err)),
-    }
-}
-
-/// Represents system specific part of a tty/console terminal.
-///
-/// This is a singleton that aquires a lock when grabbed via get_term.  It
-/// is part of the general Console struct.
-pub struct SysConsole<'a> {
-    tty: MutexGuard<'a, File>,
+/// Represents system specific part of a tty/console output.
+pub struct SysConsoleOut {
+    tty: File,
     prev_ios: Option<Termios>,
 }
 
-impl<'a> Drop for SysConsole<'a> {
+impl Drop for SysConsoleOut {
     fn drop(&mut self) {
         if self.suspend_raw_mode().is_err() {}
     }
 }
 
-impl<'a> SysConsole<'a> {
+impl SysConsoleOut {
     /// Temporarily switch to original mode
     pub fn suspend_raw_mode(&self) -> io::Result<()> {
         if let Some(prev_ios) = self.prev_ios {
@@ -79,7 +60,24 @@ impl<'a> SysConsole<'a> {
         }
         Ok(())
     }
+}
 
+impl Write for SysConsoleOut {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.tty.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.tty.flush()
+    }
+}
+
+/// Represents system specific part of a tty/console input.
+pub struct SysConsoleIn {
+    tty: File,
+}
+
+impl SysConsoleIn {
     /// Return when more data is avialable.
     ///
     /// Calls to a get_* function should return a value now.
@@ -132,18 +130,8 @@ impl<'a> SysConsole<'a> {
     }
 }
 
-impl<'a> Read for SysConsole<'a> {
+impl Read for SysConsoleIn {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.tty.read(buf)
-    }
-}
-
-impl<'a> Write for SysConsole<'a> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.tty.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.tty.flush()
     }
 }

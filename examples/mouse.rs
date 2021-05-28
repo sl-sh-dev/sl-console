@@ -1,13 +1,13 @@
 extern crate sl_console;
 
-use std::io::Write;
 use sl_console::console::*;
 use sl_console::cursor::{self, CursorPos};
 use sl_console::event::*;
-use sl_console::input::MouseTerminal;
+use sl_console::input::*;
+use std::io::Write;
 
 fn main() {
-    let console = console().unwrap();
+    let console = conout().unwrap();
     let mut console = MouseTerminal::from(console);
 
     writeln!(
@@ -18,15 +18,16 @@ fn main() {
     )
     .unwrap();
 
+    let mut conin = conin().unwrap();
     loop {
-        let c = console.get_event();
+        let c = conin.get_event();
         let evt = c.unwrap();
         match evt {
             Event::Key(Key::Char('q')) => break,
             Event::Mouse(me) => match me {
                 MouseEvent::Press(_, a, b) | MouseEvent::Release(a, b) | MouseEvent::Hold(a, b) => {
                     write!(console, "{}", cursor::Goto(a, b)).unwrap();
-                    let (x, y) = console.cursor_pos().unwrap();
+                    let (x, y) = conin.cursor_pos().unwrap();
                     write!(
                         console,
                         "{}{}Cursor is at: ({},{}){}",

@@ -1,7 +1,7 @@
 extern crate sl_console;
 
-use std::io::{stdin, stdout, Write};
 use sl_console::input::TermRead;
+use std::io::{stdin, stdout, Write};
 
 fn main() {
     sl_console::set_virtual_terminal().unwrap();
