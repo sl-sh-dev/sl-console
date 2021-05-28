@@ -23,9 +23,7 @@ pub fn open_syscon_in() -> io::Result<SysConsoleIn> {
             }
         }
     });
-    Ok(SysConsoleIn {
-        recv,
-    })
+    Ok(SysConsoleIn { recv })
 }
 
 /// Open and return the write side of a console.
