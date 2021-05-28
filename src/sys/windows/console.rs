@@ -70,11 +70,11 @@ impl SysConsoleOut {
     /// Temporarily switch to raw mode
     pub fn activate_raw_mode(&mut self) -> io::Result<()> {
         let mut ios = get_terminal_attr()?;
-        raw_terminal_attr(&mut ios);
-        set_terminal_attr(&ios)?;
         if self.prev_ios.is_none() {
             self.prev_ios = Some(ios);
         }
+        raw_terminal_attr(&mut ios);
+        set_terminal_attr(&ios)?;
         Ok(())
     }
 }
