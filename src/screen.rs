@@ -6,7 +6,7 @@
 //! # Example
 //!
 //! ```rust
-//! use termion::screen::AlternateScreen;
+//! use sl_console::screen::AlternateScreen;
 //! use std::io::{Write, stdout};
 //!
 //!     {

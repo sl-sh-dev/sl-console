@@ -1,9 +1,9 @@
-extern crate termion;
+extern crate sl_console;
 
-use termion::{color, style};
+use sl_console::{color, style};
 
 fn main() {
-    termion::set_virtual_terminal().unwrap();
+    sl_console::set_virtual_terminal().unwrap();
     println!("{}Red", color::Fg(color::Red));
     println!("{}Blue", color::Fg(color::Blue));
     println!("{}Blue'n'Bold{}", style::Bold, style::Reset);

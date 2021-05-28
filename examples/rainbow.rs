@@ -1,16 +1,16 @@
-extern crate termion;
+extern crate sl_console;
 
 use std::io::{stdin, stdout, Write};
-use termion::event::Key;
-use termion::input::TermRead;
-use termion::raw::IntoRawMode;
+use sl_console::event::Key;
+use sl_console::input::TermRead;
+use sl_console::raw::IntoRawMode;
 
 fn rainbow<W: Write>(stdout: &mut W, blue: u8) {
     write!(
         stdout,
         "{}{}",
-        termion::cursor::Goto(1, 1),
-        termion::clear::All
+        sl_console::cursor::Goto(1, 1),
+        sl_console::clear::All
     )
     .unwrap();
 
@@ -21,14 +21,14 @@ fn rainbow<W: Write>(stdout: &mut W, blue: u8) {
             write!(
                 stdout,
                 "{} ",
-                termion::color::Bg(termion::color::Rgb(red, green, blue))
+                sl_console::color::Bg(sl_console::color::Rgb(red, green, blue))
             )
             .unwrap();
         }
         write!(stdout, "\n\r").unwrap();
     }
 
-    writeln!(stdout, "{}b = {}", termion::style::Reset, blue).unwrap();
+    writeln!(stdout, "{}b = {}", sl_console::style::Reset, blue).unwrap();
 }
 
 fn main() {
@@ -38,9 +38,9 @@ fn main() {
     writeln!(
         stdout,
         "{}{}{}Use the up/down arrow keys to change the blue in the rainbow.",
-        termion::clear::All,
-        termion::cursor::Goto(1, 1),
-        termion::cursor::Hide
+        sl_console::clear::All,
+        sl_console::cursor::Goto(1, 1),
+        sl_console::cursor::Hide
     )
     .unwrap();
 
@@ -62,5 +62,5 @@ fn main() {
         stdout.flush().unwrap();
     }
 
-    write!(stdout, "{}", termion::cursor::Show).unwrap();
+    write!(stdout, "{}", sl_console::cursor::Show).unwrap();
 }

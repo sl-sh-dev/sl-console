@@ -1,10 +1,10 @@
-extern crate termion;
+extern crate sl_console;
 
 use std::io::Write;
-use termion::console::*;
-use termion::cursor::{self, CursorPos};
-use termion::event::*;
-use termion::input::MouseTerminal;
+use sl_console::console::*;
+use sl_console::cursor::{self, CursorPos};
+use sl_console::event::*;
+use sl_console::input::MouseTerminal;
 
 fn main() {
     let console = console().unwrap();
@@ -13,8 +13,8 @@ fn main() {
     writeln!(
         console,
         "{}{}q to exit. Type stuff, use alt, click around...",
-        termion::clear::All,
-        termion::cursor::Goto(1, 1)
+        sl_console::clear::All,
+        sl_console::cursor::Goto(1, 1)
     )
     .unwrap();
 
@@ -31,7 +31,7 @@ fn main() {
                         console,
                         "{}{}Cursor is at: ({},{}){}",
                         cursor::Goto(5, 5),
-                        termion::clear::UntilNewline,
+                        sl_console::clear::UntilNewline,
                         x,
                         y,
                         cursor::Goto(a, b)

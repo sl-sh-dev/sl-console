@@ -1,10 +1,12 @@
-<p align="center">
-<img alt="Termion logo" src="https://rawgit.com/redox-os/termion/master/logo.svg" />
-</p>
+This is a fork of termion (https://gitlab.redox-os.org/redox-os/termion).
+It adds window support (for 10 with new console ansi code support) based on
+Jezza's MR (https://gitlab.redox-os.org/redox-os/termion/-/merge_requests/151).
+It also attempts to fix some of the issues with the async stuff by treating the
+console/tty as a singleton and controlling access that way.  It also uses
+non-blocking io and select on unix to support async and a thread on windows
+(similiar to termion).
 
-[![Build Status](https://travis-ci.org/redox-os/termion.svg?branch=master)](https://travis-ci.org/redox-os/termion) [![Latest Version](https://img.shields.io/crates/v/termion.svg)](https://crates.io/crates/termion) | [Documentation](https://docs.rs/termion) | [Examples](https://github.com/redox-os/termion/tree/master/examples) | [Changelog](https://github.com/redox-os/termion/tree/master/CHANGELOG.md) | [Tutorial](http://ticki.github.io/blog/making-terminal-applications-in-rust-with-termion/)
-|----|----|----|----|----
-
+Original readme follows:
 
 **Termion** is a pure Rust, bindless library for low-level handling, manipulating
 and reading information about terminals. This provides a full-featured
@@ -22,7 +24,7 @@ something more high-level, refer to inquirer-rs, which uses Termion as backend.
 Termion generates escapes and API calls for the user. This makes it a whole lot
 cleaner to use escapes.
 
-Supports Redox, Mac OS X, BSD, and Linux (or, in general, ANSI terminals).
+Supports Mac OS X, BSD, Linux and Windows (or, in general, ANSI terminals).
 
 ## A note on stability
 

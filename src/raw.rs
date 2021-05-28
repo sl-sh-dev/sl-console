@@ -12,7 +12,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use termion::raw::IntoRawMode;
+//! use sl_console::raw::IntoRawMode;
 //! use std::io::{Write, stdout};
 //!
 //!     let mut stdout = stdout().into_raw_mode().unwrap();

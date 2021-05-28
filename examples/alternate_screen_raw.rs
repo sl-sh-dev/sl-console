@@ -1,23 +1,23 @@
-extern crate termion;
+extern crate sl_console;
 
 use std::io::{stdin, stdout, Write};
-use termion::event::Key;
-use termion::input::TermRead;
-use termion::raw::IntoRawMode;
-use termion::screen::*;
+use sl_console::event::Key;
+use sl_console::input::TermRead;
+use sl_console::raw::IntoRawMode;
+use sl_console::screen::*;
 
 fn write_alt_screen_msg<W: Write>(screen: &mut W) {
     write!(screen, "{}{}Welcome to the alternate screen.{}Press '1' to switch to the main screen or '2' to switch to the alternate screen.{}Press 'q' to exit (and switch back to the main screen).",
-           termion::clear::All,
-           termion::cursor::Goto(1, 1),
-           termion::cursor::Goto(1, 3),
-           termion::cursor::Goto(1, 4)).unwrap();
+           sl_console::clear::All,
+           sl_console::cursor::Goto(1, 1),
+           sl_console::cursor::Goto(1, 3),
+           sl_console::cursor::Goto(1, 4)).unwrap();
 }
 
 fn main() {
     let stdin = stdin();
     let mut screen = AlternateScreen::from(stdout().into_raw_mode().unwrap());
-    write!(screen, "{}", termion::cursor::Hide).unwrap();
+    write!(screen, "{}", sl_console::cursor::Hide).unwrap();
     write_alt_screen_msg(&mut screen);
 
     screen.flush().unwrap();
@@ -36,5 +36,5 @@ fn main() {
         }
         screen.flush().unwrap();
     }
-    write!(screen, "{}", termion::cursor::Show).unwrap();
+    write!(screen, "{}", sl_console::cursor::Show).unwrap();
 }

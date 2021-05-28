@@ -1,13 +1,13 @@
-extern crate termion;
+extern crate sl_console;
 
 use std::io::*;
-use termion::color::{AnsiValue, AvailableColors, Bg};
+use sl_console::color::{AnsiValue, AvailableColors, Bg};
 
 fn main() {
-    let mut term = termion::console().unwrap();
+    let mut term = sl_console::console().unwrap();
     let count = term.available_colors().unwrap();
 
-    termion::set_virtual_terminal().unwrap();
+    sl_console::set_virtual_terminal().unwrap();
     println!("This terminal supports {} colors.", count);
     for i in 0..count {
         //print!("{} {}", Bg(AnsiValue(i as u8)), Bg(AnsiValue(0)));

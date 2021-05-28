@@ -1,10 +1,10 @@
-extern crate termion;
+extern crate sl_console;
 
 use std::io::{stdin, stdout, Write};
-use termion::input::TermRead;
+use sl_console::input::TermRead;
 
 fn main() {
-    termion::set_virtual_terminal().unwrap();
+    sl_console::set_virtual_terminal().unwrap();
     let stdout = stdout();
     let mut stdout = stdout.lock();
     let stdin = stdin();

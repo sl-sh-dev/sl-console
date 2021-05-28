@@ -1,6 +1,6 @@
-extern crate termion;
+extern crate sl_console;
 
-use termion::terminal_size;
+use sl_console::terminal_size;
 
 fn main() {
     println!("Size is {:?}", terminal_size().unwrap())

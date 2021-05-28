@@ -1,4 +1,4 @@
-extern crate termion;
+extern crate sl_console;
 
 #[cfg(not(windows))]
 use std::fs;
@@ -11,7 +11,7 @@ fn main() {
     #[cfg(windows)]
     let stream = io::stdin();
 
-    if termion::is_tty(&stream) {
+    if sl_console::is_tty(&stream) {
         println!("This is a TTY!");
     } else {
         println!("This is not a TTY :(");

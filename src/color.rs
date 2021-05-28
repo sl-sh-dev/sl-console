@@ -3,7 +3,7 @@
 //! # Example
 //!
 //! ```rust
-//! use termion::color;
+//! use sl_console::color;
 //!
 //!     println!("{}Red", color::Fg(color::Red));
 //!     println!("{}Blue", color::Fg(color::Blue));

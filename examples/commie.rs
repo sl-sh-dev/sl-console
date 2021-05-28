@@ -1,6 +1,6 @@
-extern crate termion;
+extern crate sl_console;
 
-use termion::{clear, color, cursor};
+use sl_console::{clear, color, cursor};
 
 use std::{thread, time};
 
@@ -28,7 +28,7 @@ const COMMUNISM: &'static str = r#"
 fn main() {
     let mut state = 0;
 
-    termion::set_virtual_terminal().unwrap();
+    sl_console::set_virtual_terminal().unwrap();
     println!(
         "\n{}{}{}{}{}{}",
         cursor::Hide,

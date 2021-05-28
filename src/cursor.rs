@@ -52,10 +52,10 @@ derive_csi_sequence!("Change the cursor style to steady bar", SteadyBar, "\x36 q
 /// # Example
 ///
 /// ```rust
-/// extern crate termion;
+/// extern crate sl_console;
 ///
 /// fn main() {
-///     print!("{}{}Stuff", termion::clear::All, termion::cursor::Goto(5, 3));
+///     print!("{}{}Stuff", sl_console::clear::All, sl_console::cursor::Goto(5, 3));
 /// }
 /// ```
 #[derive(Copy, Clone, PartialEq, Eq)]
