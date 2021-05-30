@@ -5,7 +5,6 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::iter::once;
 use std::os::windows::ffi::OsStrExt;
-//use std::os::windows::io::AsRawHandle;
 use std::os::windows::io::FromRawHandle;
 use std::ptr::null_mut;
 use std::thread;
@@ -13,42 +12,24 @@ use std::time::Duration;
 
 use crossbeam_channel::*;
 use winapi::ctypes::c_void;
-use winapi::shared::minwindef::BOOL;
 use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
-//use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::fileapi::CreateFile2;
-use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+use winapi::um::wincon::{
+    ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_VIRTUAL_TERMINAL_INPUT,
+    ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+};
 
 use super::Termios;
-use crate::sys::attr::{get_terminal_attr, raw_terminal_attr, set_terminal_attr};
+use crate::sys::attr::{
+    get_terminal_attr, handle_result, raw_terminal_attr, result, set_terminal_attr,
+};
 
-// These are copied from the MSDocs.
-// Yes, technically, not the best, but Windows won't change these for obvious reasons.
-// We could link in winapi explicitly, as crossterm_winapi is already doing that, but
-// I feel it just adds a bit too much cruft, when we can just do this.
-//
-// https://docs.microsoft.com/en-us/windows/console/setconsolemode#parameters
-const ENABLE_PROCESSED_INPUT: u32 = 0x0001;
-const ENABLE_LINE_INPUT: u32 = 0x0002;
-const ENABLE_ECHO_INPUT: u32 = 0x0004;
-const ENABLE_VIRTUAL_TERMINAL_INPUT: u32 = 0x0200;
-const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
 const RAW_MODE_MASK: u32 = ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT;
-
-/// Get the result of a call to WinAPI as an [`io::Result`].
-#[inline]
-pub fn result(return_value: BOOL) -> io::Result<()> {
-    if return_value != 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
-}
 
 /// Open and return the read side of a console.
 pub fn open_syscon_in() -> io::Result<SysConsoleIn> {
     let console_in_name: Vec<u16> = OsStr::new("CONIN$").encode_wide().chain(once(0)).collect();
-    let handle = unsafe {
+    let handle = handle_result(unsafe {
         CreateFile2(
             console_in_name.as_ptr(),
             winapi::um::winnt::GENERIC_READ | winapi::um::winnt::GENERIC_WRITE,
@@ -56,10 +37,7 @@ pub fn open_syscon_in() -> io::Result<SysConsoleIn> {
             winapi::um::fileapi::OPEN_EXISTING,
             null_mut(),
         )
-    };
-    if handle == INVALID_HANDLE_VALUE {
-        return Err(io::Error::last_os_error());
-    }
+    })?;
 
     let mut console_mode = 0;
     result(unsafe { GetConsoleMode(handle as *mut c_void, &mut console_mode) })?;
@@ -83,7 +61,7 @@ pub fn open_syscon_in() -> io::Result<SysConsoleIn> {
 pub fn open_syscon_out() -> io::Result<SysConsoleOut> {
     //let tty = OpenOptions::new().write(true).read(true).open("CONOUT$")?;
     let console_in_name: Vec<u16> = OsStr::new("CONOUT$").encode_wide().chain(once(0)).collect();
-    let handle = unsafe {
+    let handle = handle_result(unsafe {
         CreateFile2(
             console_in_name.as_ptr(),
             winapi::um::winnt::GENERIC_READ | winapi::um::winnt::GENERIC_WRITE,
@@ -91,12 +69,8 @@ pub fn open_syscon_out() -> io::Result<SysConsoleOut> {
             winapi::um::fileapi::OPEN_EXISTING,
             null_mut(),
         )
-    };
-    if handle == INVALID_HANDLE_VALUE {
-        return Err(io::Error::last_os_error());
-    }
+    })?;
 
-    //let handle = tty.as_raw_handle();
     let mut console_mode = 0;
     result(unsafe { GetConsoleMode(handle as *mut c_void, &mut console_mode) })?;
     console_mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
