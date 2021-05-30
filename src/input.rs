@@ -5,7 +5,6 @@ use std::ops;
 
 use crate::console::ConsoleWrite;
 use crate::event::{self, Event, Key};
-use crate::raw::IntoRawMode;
 
 /// An iterator over input keys.
 pub struct Keys<R> {
@@ -136,15 +135,6 @@ pub trait TermRead {
     /// EOT and ETX will abort the prompt, returning `None`. Newline or carriage return will
     /// complete the input.
     fn read_line(&mut self) -> io::Result<Option<String>>;
-
-    /// Read a password.
-    ///
-    /// EOT and ETX will abort the prompt, returning `None`. Newline or carriage return will
-    /// complete the input.
-    fn read_passwd<W: Write>(&mut self, writer: &mut W) -> io::Result<Option<String>> {
-        let _raw = writer.into_raw_mode()?;
-        self.read_line()
-    }
 }
 
 impl<R: Read> TermRead for R {
@@ -241,7 +231,6 @@ impl<W: ConsoleWrite> Write for MouseTerminal<W> {
 mod test {
     use super::*;
     use event::{Event, Key, MouseButton, MouseEvent};
-    use std::io;
 
     #[test]
     fn test_keys() {
@@ -373,12 +362,8 @@ mod test {
     }
 
     fn line_match(a: &str, b: Option<&str>) {
-        let mut sink = io::sink();
-
         let line = a.as_bytes().read_line().unwrap();
-        let pass = a.as_bytes().read_passwd(&mut sink).unwrap();
-
-        // godammit rustc
+        let pass = a.as_bytes().read_line().unwrap();
 
         assert_eq!(line, pass);
 

@@ -1,4 +1,5 @@
 use std::io;
+//use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
 
 use super::crossterm_winapi::{ConsoleMode, Handle};
 use super::Termios;
@@ -43,10 +44,5 @@ pub fn raw_terminal_attr(termios: &mut Termios) {
     termios.0 &= !RAW_MODE_MASK;
     termios.0 |= ENABLE_VIRTUAL_TERMINAL_INPUT;
 
-    termios.1 |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-}
-
-pub fn virt_terminal_attr(termios: &mut Termios) {
-    termios.0 |= ENABLE_VIRTUAL_TERMINAL_INPUT;
     termios.1 |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 }

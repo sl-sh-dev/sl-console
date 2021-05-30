@@ -23,7 +23,7 @@
 use std::io::{self, Write};
 use std::ops;
 
-use crate::sys::attr::{get_terminal_attr, raw_terminal_attr, set_terminal_attr};
+use crate::sys::attr::{get_terminal_attr_fd, raw_terminal_attr, set_terminal_attr_fd};
 use crate::sys::Termios;
 
 /// The timeout of an escape code control sequence, in milliseconds.

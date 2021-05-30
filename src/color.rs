@@ -11,13 +11,15 @@
 //! ```
 
 use crate::console::*;
-use crate::raw::CONTROL_SEQUENCE_TIMEOUT;
 use numtoa::NumToA;
 use std::env;
 use std::fmt;
 use std::fmt::Debug;
 use std::io::{self, Write};
 use std::time::{Duration, SystemTime};
+
+/// The timeout of an escape code control sequence, in milliseconds.
+const CONTROL_SEQUENCE_TIMEOUT: u64 = 100;
 
 /// A terminal color.
 pub trait Color: Debug {

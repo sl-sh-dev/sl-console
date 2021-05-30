@@ -191,9 +191,10 @@ impl ConsoleRead for ConsoleIn {
 impl Read for ConsoleIn {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.blocking {
-            self.syscon.poll();
+            self.syscon.read_block(buf)
+        } else {
+            self.syscon.read(buf)
         }
-        self.syscon.read(buf)
     }
 }
 
@@ -207,32 +208,15 @@ impl<'a> ConsoleRead for ConsoleInLock<'a> {
     }
 
     fn get_event_and_raw(&mut self) -> io::Result<(Event, Vec<u8>)> {
-        let mut leftover = self.inner.borrow_mut().leftover.take();
-        if let Some(er) = event_and_raw(self, &mut leftover) {
-            er
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::WouldBlock,
-                "Event stream would block",
-            ))
-        }
+        self.inner.borrow_mut().get_event_and_raw()
     }
 
     fn get_event(&mut self) -> io::Result<Event> {
-        match self.get_event_and_raw() {
-            Ok((event, _raw)) => Ok(event),
-            Err(err) => Err(err),
-        }
+        self.inner.borrow_mut().get_event()
     }
 
     fn get_key(&mut self) -> io::Result<Key> {
-        loop {
-            match self.get_event() {
-                Ok(Event::Key(k)) => return Ok(k),
-                Ok(_) => continue,
-                Err(e) => return Err(e),
-            }
-        }
+        self.inner.borrow_mut().get_key()
     }
 
     fn poll(&mut self) {
@@ -246,9 +230,6 @@ impl<'a> ConsoleRead for ConsoleInLock<'a> {
 
 impl<'a> Read for ConsoleInLock<'a> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.inner.borrow().blocking {
-            self.inner.borrow_mut().poll();
-        }
         self.inner.borrow_mut().read(buf)
     }
 }

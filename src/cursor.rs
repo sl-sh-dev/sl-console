@@ -1,12 +1,14 @@
 //! Cursor movement.
 
 use crate::console::*;
-use crate::raw::CONTROL_SEQUENCE_TIMEOUT;
 use numtoa::NumToA;
 use std::fmt;
 use std::io::{self, Error, ErrorKind, Write};
 use std::ops;
 use std::time::{Duration, SystemTime};
+
+/// The timeout of an escape code control sequence, in milliseconds.
+const CONTROL_SEQUENCE_TIMEOUT: u64 = 100;
 
 derive_csi_sequence!("Hide the cursor.", Hide, "?25l");
 derive_csi_sequence!("Show the cursor.", Show, "?25h");

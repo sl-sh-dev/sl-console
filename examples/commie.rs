@@ -28,7 +28,6 @@ const COMMUNISM: &'static str = r#"
 fn main() {
     let mut state = 0;
 
-    sl_console::set_virtual_terminal().unwrap();
     println!(
         "\n{}{}{}{}{}{}",
         cursor::Hide,

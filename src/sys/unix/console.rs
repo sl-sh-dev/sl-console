@@ -22,16 +22,18 @@ pub fn open_syscon_in() -> io::Result<SysConsoleIn> {
 /// Open and return the write side of a tty.
 pub fn open_syscon_out() -> io::Result<SysConsoleOut> {
     let tty = OpenOptions::new().write(true).open("/dev/tty")?;
-    Ok(SysConsoleOut {
-        tty,
-        prev_ios: None,
-    })
+    let tty_fd = tty.as_raw_fd();
+    let mut ios = get_terminal_attr_fd(tty_fd)?;
+    let prev_ios = ios;
+    raw_terminal_attr(&mut ios);
+    set_terminal_attr_fd(tty_fd, &ios)?;
+    Ok(SysConsoleOut { tty, prev_ios })
 }
 
 /// Represents system specific part of a tty/console output.
 pub struct SysConsoleOut {
     tty: File,
-    prev_ios: Option<Termios>,
+    prev_ios: Termios,
 }
 
 impl Drop for SysConsoleOut {
@@ -43,21 +45,16 @@ impl Drop for SysConsoleOut {
 impl SysConsoleOut {
     /// Temporarily switch to original mode
     pub fn suspend_raw_mode(&self) -> io::Result<()> {
-        if let Some(prev_ios) = self.prev_ios {
-            set_terminal_attr_fd(self.tty.as_raw_fd(), &prev_ios)?;
-        }
+        set_terminal_attr_fd(self.tty.as_raw_fd(), &self.prev_ios)?;
         Ok(())
     }
 
-    /// Temporarily switch to raw mode
+    /// Rwitch back to raw mode
     pub fn activate_raw_mode(&mut self) -> io::Result<()> {
         let tty_fd = self.tty.as_raw_fd();
         let mut ios = get_terminal_attr_fd(tty_fd)?;
         raw_terminal_attr(&mut ios);
         set_terminal_attr_fd(tty_fd, &ios)?;
-        if self.prev_ios.is_none() {
-            self.prev_ios = Some(ios);
-        }
         Ok(())
     }
 }
@@ -127,6 +124,14 @@ impl SysConsoleIn {
                 &mut tv,
             ) == 1
         }
+    }
+
+    /// Read from the byte stream.
+    ///
+    /// This version blocks, the read from the Read trait does not.
+    pub fn read_block(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.poll();
+        self.read(buf)
     }
 }
 

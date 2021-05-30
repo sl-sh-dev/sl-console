@@ -2,9 +2,9 @@ extern crate sl_console;
 
 use sl_console::event::Key;
 use sl_console::input::TermRead;
-use sl_console::raw::IntoRawMode;
 use sl_console::screen::*;
-use std::io::{stdin, stdout, Write};
+use sl_console::{conin, conout};
+use std::io::Write;
 
 fn write_alt_screen_msg<W: Write>(screen: &mut W) {
     write!(screen, "{}{}Welcome to the alternate screen.{}Press '1' to switch to the main screen or '2' to switch to the alternate screen.{}Press 'q' to exit (and switch back to the main screen).",
@@ -15,8 +15,8 @@ fn write_alt_screen_msg<W: Write>(screen: &mut W) {
 }
 
 fn main() {
-    let stdin = stdin();
-    let mut screen = AlternateScreen::from(stdout().into_raw_mode().unwrap());
+    let stdin = conin().unwrap();
+    let mut screen = AlternateScreen::from(conout().unwrap());
     write!(screen, "{}", sl_console::cursor::Hide).unwrap();
     write_alt_screen_msg(&mut screen);
 
