@@ -1,19 +1,19 @@
 extern crate sl_console;
 
-#[cfg(not(windows))]
-use std::fs;
-#[cfg(windows)]
 use std::io;
 
 fn main() {
-    #[cfg(not(windows))]
-    let stream = fs::File::create("/dev/stdout").unwrap();
-    #[cfg(windows)]
-    let stream = io::stdin();
+    let streamin = io::stdin();
+    let streamout = io::stdout();
 
-    if sl_console::is_tty(&stream) {
-        println!("This is a TTY!");
+    if sl_console::is_tty(&streamin) {
+        println!("STDIN is a TTY!");
     } else {
-        println!("This is not a TTY :(");
+        println!("STDIN is NOT a TTY :(");
+    }
+    if sl_console::is_tty(&streamout) {
+        println!("STDOUT is a TTY!");
+    } else {
+        println!("STDOUT is NOT a TTY :(");
     }
 }
