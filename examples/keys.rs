@@ -2,12 +2,13 @@ extern crate sl_console;
 
 use sl_console::event::Key;
 use sl_console::input::TermRead;
-use sl_console::{conin, conout};
+use sl_console::{conin, conout, ConsoleWrite};
 use std::io::Write;
 
 fn main() {
     let stdin = conin().unwrap();
     let mut stdout = conout().unwrap();
+    let _raw = stdout.raw_mode_guard().unwrap();
 
     write!(
         stdout,

@@ -23,10 +23,8 @@ pub fn open_syscon_in() -> io::Result<SysConsoleIn> {
 pub fn open_syscon_out() -> io::Result<SysConsoleOut> {
     let tty = OpenOptions::new().write(true).open("/dev/tty")?;
     let tty_fd = tty.as_raw_fd();
-    let mut ios = get_terminal_attr_fd(tty_fd)?;
+    let ios = get_terminal_attr_fd(tty_fd)?;
     let prev_ios = ios;
-    raw_terminal_attr(&mut ios);
-    set_terminal_attr_fd(tty_fd, &ios)?;
     Ok(SysConsoleOut { tty, prev_ios })
 }
 
@@ -49,7 +47,7 @@ impl SysConsoleOut {
         Ok(())
     }
 
-    /// Rwitch back to raw mode
+    /// Switch back to raw mode
     pub fn activate_raw_mode(&mut self) -> io::Result<()> {
         let tty_fd = self.tty.as_raw_fd();
         let mut ios = get_terminal_attr_fd(tty_fd)?;

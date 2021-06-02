@@ -3,7 +3,7 @@ extern crate sl_console;
 use sl_console::event::Key;
 use sl_console::input::TermRead;
 use sl_console::screen::*;
-use sl_console::{conin, conout};
+use sl_console::*;
 use std::io::Write;
 
 fn write_alt_screen_msg<W: Write>(screen: &mut W) {
@@ -16,6 +16,7 @@ fn write_alt_screen_msg<W: Write>(screen: &mut W) {
 
 fn main() {
     let stdin = conin().unwrap();
+    let _raw = conout().unwrap().raw_mode_guard().unwrap();
     let mut screen = AlternateScreen::from(conout().unwrap());
     write!(screen, "{}", sl_console::cursor::Hide).unwrap();
     write_alt_screen_msg(&mut screen);

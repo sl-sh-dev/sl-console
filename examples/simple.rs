@@ -1,12 +1,13 @@
 extern crate sl_console;
 
 use sl_console::color;
-use sl_console::{conin, conout};
+use sl_console::*;
 use std::io::{Read, Write};
 
 fn main() {
     // Initialize 'em all.
     let mut stdout = conout().unwrap();
+    let _raw = stdout.raw_mode_guard().unwrap();
     let stdin = conin().unwrap();
 
     write!(

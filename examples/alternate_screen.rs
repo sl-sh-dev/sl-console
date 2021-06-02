@@ -1,7 +1,7 @@
 extern crate sl_console;
 
-use sl_console::screen::*;
 use sl_console::conout;
+use sl_console::screen::*;
 use std::io::Write;
 use std::{thread, time};
 

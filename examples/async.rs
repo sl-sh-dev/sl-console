@@ -10,6 +10,7 @@ fn main() {
     let mut conin = conin().unwrap();
     conin.set_blocking(false); // Console to async read.
     let mut conout = conout().unwrap();
+    let _raw = conout.raw_mode_guard().unwrap();
 
     write!(
         conout,

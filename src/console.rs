@@ -21,9 +21,11 @@ fn make_tty_in() -> io::Result<ReentrantMutex<RefCell<ConsoleIn>>> {
 }
 
 fn make_tty_out() -> io::Result<ReentrantMutex<RefCell<ConsoleOut>>> {
-    let mut syscon = open_syscon_out()?;
-    syscon.activate_raw_mode()?;
-    Ok(ReentrantMutex::new(RefCell::new(ConsoleOut { syscon })))
+    let syscon = open_syscon_out()?;
+    Ok(ReentrantMutex::new(RefCell::new(ConsoleOut {
+        syscon,
+        raw_mode: false,
+    })))
 }
 
 lazy_static! {
@@ -67,8 +69,33 @@ pub fn conout<'a>() -> io::Result<ConsoleOutLock<'a>> {
     }
 }
 
+/// RAII guard for entering raw mode, will restore previous mode when dropped.
+pub struct RawModeGuard {
+    old_raw: bool,
+}
+
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        if !self.old_raw {
+            if let Ok(mut conout) = conout() {
+                if conout.raw_mode_off().is_err() {} // Ignore error in drop.
+            }
+        }
+    }
+}
+
 /// Console output trait.
-pub trait ConsoleWrite: Write {}
+pub trait ConsoleWrite: Write {
+    /// Switch to original (non-raw) mode
+    fn raw_mode_off(&mut self) -> io::Result<()>;
+    /// Switch to raw mode
+    fn raw_mode_on(&mut self) -> io::Result<()>;
+    /// Switch to raw mode and return a RAII guard to switch to previous mode
+    /// when scope ends.
+    fn raw_mode_guard(&mut self) -> io::Result<RawModeGuard>;
+    /// True if in raw mode.
+    fn is_raw_mode(&self) -> bool;
+}
 
 /// Console input trait.
 pub trait ConsoleRead: Read {
@@ -134,6 +161,7 @@ pub struct ConsoleInLock<'a> {
 /// and other issues.
 pub struct ConsoleOut {
     syscon: SysConsoleOut,
+    raw_mode: bool,
 }
 
 /// A locked console output device.
@@ -234,7 +262,36 @@ impl<'a> Read for ConsoleInLock<'a> {
     }
 }
 
-impl ConsoleWrite for ConsoleOut {}
+impl ConsoleWrite for ConsoleOut {
+    fn raw_mode_off(&mut self) -> io::Result<()> {
+        if self.raw_mode {
+            self.raw_mode = false;
+            self.syscon.suspend_raw_mode()?;
+        }
+        Ok(())
+    }
+
+    fn raw_mode_on(&mut self) -> io::Result<()> {
+        if !self.raw_mode {
+            self.raw_mode = true;
+            self.syscon.activate_raw_mode()?;
+        }
+        Ok(())
+    }
+
+    fn raw_mode_guard(&mut self) -> io::Result<RawModeGuard> {
+        let old_raw = self.raw_mode;
+        if !self.raw_mode {
+            self.raw_mode = true;
+            self.syscon.activate_raw_mode()?;
+        }
+        Ok(RawModeGuard { old_raw })
+    }
+
+    fn is_raw_mode(&self) -> bool {
+        self.raw_mode
+    }
+}
 
 impl Write for ConsoleOut {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -246,7 +303,23 @@ impl Write for ConsoleOut {
     }
 }
 
-impl<'a> ConsoleWrite for ConsoleOutLock<'a> {}
+impl<'a> ConsoleWrite for ConsoleOutLock<'a> {
+    fn raw_mode_off(&mut self) -> io::Result<()> {
+        self.inner.borrow_mut().raw_mode_off()
+    }
+
+    fn raw_mode_on(&mut self) -> io::Result<()> {
+        self.inner.borrow_mut().raw_mode_on()
+    }
+
+    fn raw_mode_guard(&mut self) -> io::Result<RawModeGuard> {
+        self.inner.borrow_mut().raw_mode_guard()
+    }
+
+    fn is_raw_mode(&self) -> bool {
+        self.inner.borrow().is_raw_mode()
+    }
+}
 
 impl<'a> Write for ConsoleOutLock<'a> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {

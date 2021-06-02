@@ -7,7 +7,8 @@ use sl_console::input::*;
 use std::io::Write;
 
 fn main() {
-    let console = conout().unwrap();
+    let mut console = conout().unwrap();
+    let _raw = console.raw_mode_guard().unwrap();
     let mut console = MouseTerminal::from(console);
 
     writeln!(
