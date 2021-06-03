@@ -36,7 +36,7 @@ pub struct SysConsoleOut {
 
 impl Drop for SysConsoleOut {
     fn drop(&mut self) {
-        if let Err(_) = set_terminal_attr_fd(self.tty.as_raw_fd(), &self.prev_ios) {}
+        if set_terminal_attr_fd(self.tty.as_raw_fd(), &self.prev_ios).is_err() {}
     }
 }
 
