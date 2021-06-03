@@ -266,7 +266,8 @@ impl ConsoleWrite for ConsoleOut {
     fn raw_mode_off(&mut self) -> io::Result<()> {
         if self.raw_mode {
             self.raw_mode = false;
-            self.syscon.suspend_raw_mode()?;
+            let conin = conin()?;
+            self.syscon.suspend_raw_mode(&conin.inner.borrow().syscon)?;
         }
         Ok(())
     }
@@ -274,17 +275,16 @@ impl ConsoleWrite for ConsoleOut {
     fn raw_mode_on(&mut self) -> io::Result<()> {
         if !self.raw_mode {
             self.raw_mode = true;
-            self.syscon.activate_raw_mode()?;
+            let conin = conin()?;
+            self.syscon
+                .activate_raw_mode(&conin.inner.borrow().syscon)?;
         }
         Ok(())
     }
 
     fn raw_mode_guard(&mut self) -> io::Result<RawModeGuard> {
         let old_raw = self.raw_mode;
-        if !self.raw_mode {
-            self.raw_mode = true;
-            self.syscon.activate_raw_mode()?;
-        }
+        self.raw_mode_on()?;
         Ok(RawModeGuard { old_raw })
     }
 

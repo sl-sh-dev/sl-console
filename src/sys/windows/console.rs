@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::iter::once;
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::io::AsRawHandle;
 use std::os::windows::io::FromRawHandle;
 use std::ptr::null_mut;
 use std::thread;
@@ -19,12 +20,9 @@ use winapi::um::wincon::{
     ENABLE_VIRTUAL_TERMINAL_PROCESSING,
 };
 
-use super::Termios;
-use crate::sys::attr::{
-    get_terminal_attr, handle_result, raw_terminal_attr, result, set_terminal_attr,
-};
+use crate::sys::attr::{handle_result, result};
 
-const RAW_MODE_MASK: u32 = ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT;
+const RAW_MODE_IN_MASK: u32 = ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT;
 
 /// Open and return the read side of a console.
 pub fn open_syscon_in() -> io::Result<SysConsoleIn> {
@@ -41,8 +39,9 @@ pub fn open_syscon_in() -> io::Result<SysConsoleIn> {
 
     let mut console_mode = 0;
     result(unsafe { GetConsoleMode(handle as *mut c_void, &mut console_mode) })?;
-    console_mode &= !RAW_MODE_MASK;
+    //console_mode &= !RAW_MODE_MASK;
     console_mode |= ENABLE_VIRTUAL_TERMINAL_INPUT;
+    let normal_mode = console_mode;
     result(unsafe { SetConsoleMode(handle as *mut c_void, console_mode) })?;
     let tty = unsafe { File::from_raw_handle(handle as *mut std::ffi::c_void) };
 
@@ -54,7 +53,12 @@ pub fn open_syscon_in() -> io::Result<SysConsoleIn> {
             }
         }
     });
-    Ok(SysConsoleIn { recv })
+    let handle = handle as usize;
+    Ok(SysConsoleIn {
+        recv,
+        normal_mode,
+        handle,
+    })
 }
 
 /// Open and return the write side of a console.
@@ -79,14 +83,15 @@ pub fn open_syscon_out() -> io::Result<SysConsoleOut> {
 
     Ok(SysConsoleOut {
         tty,
-        prev_ios: None,
+        normal_mode: console_mode,
     })
 }
 
 /// Represents system specific part of a tty/console output.
 pub struct SysConsoleOut {
     tty: File,
-    prev_ios: Option<Termios>,
+    /// The "normal" console attribs for out.
+    normal_mode: u32,
 }
 
 /// An asynchronous reader.
@@ -96,31 +101,29 @@ pub struct SysConsoleOut {
 pub struct SysConsoleIn {
     /// The underlying receiver.
     recv: Receiver<io::Result<u8>>,
-}
-
-impl Drop for SysConsoleOut {
-    fn drop(&mut self) {
-        if self.suspend_raw_mode().is_err() {}
-    }
+    /// The "normal" console attribs for in.
+    normal_mode: u32,
+    /// Handle to CONIN$
+    handle: usize,
 }
 
 impl SysConsoleOut {
-    /// Temporarily switch to original mode
-    pub fn suspend_raw_mode(&self) -> io::Result<()> {
-        if let Some(prev_ios) = self.prev_ios {
-            set_terminal_attr(&prev_ios)?;
-        }
+    /// Switch to original mode
+    pub fn suspend_raw_mode(&self, conin: &SysConsoleIn) -> io::Result<()> {
+        let handle = self.tty.as_raw_handle() as *mut c_void;
+        result(unsafe { SetConsoleMode(handle, self.normal_mode) })?;
+        let handle = conin.handle as *mut c_void;
+        result(unsafe { SetConsoleMode(handle, conin.normal_mode) })?;
         Ok(())
     }
 
-    /// Temporarily switch to raw mode
-    pub fn activate_raw_mode(&mut self) -> io::Result<()> {
-        let mut ios = get_terminal_attr()?;
-        if self.prev_ios.is_none() {
-            self.prev_ios = Some(ios);
-        }
-        raw_terminal_attr(&mut ios);
-        //set_terminal_attr(&ios)?;
+    /// Switch to raw mode
+    pub fn activate_raw_mode(&mut self, conin: &SysConsoleIn) -> io::Result<()> {
+        //let handle = self.tty.as_raw_handle() as *mut c_void;
+        //result(unsafe { SetConsoleMode(handle, self.normal_mode) })?;
+        let handle = conin.handle as *mut c_void;
+        let raw_mode = conin.normal_mode & !RAW_MODE_IN_MASK;
+        result(unsafe { SetConsoleMode(handle, raw_mode) })?;
         Ok(())
     }
 }

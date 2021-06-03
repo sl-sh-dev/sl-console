@@ -36,19 +36,19 @@ pub struct SysConsoleOut {
 
 impl Drop for SysConsoleOut {
     fn drop(&mut self) {
-        if self.suspend_raw_mode().is_err() {}
+        if let Err(_) = set_terminal_attr_fd(self.tty.as_raw_fd(), &self.prev_ios) {}
     }
 }
 
 impl SysConsoleOut {
     /// Temporarily switch to original mode
-    pub fn suspend_raw_mode(&self) -> io::Result<()> {
+    pub fn suspend_raw_mode(&self, _conin: &SysConsoleIn) -> io::Result<()> {
         set_terminal_attr_fd(self.tty.as_raw_fd(), &self.prev_ios)?;
         Ok(())
     }
 
     /// Switch back to raw mode
-    pub fn activate_raw_mode(&mut self) -> io::Result<()> {
+    pub fn activate_raw_mode(&mut self, _conin: &SysConsoleIn) -> io::Result<()> {
         let tty_fd = self.tty.as_raw_fd();
         let mut ios = get_terminal_attr_fd(tty_fd)?;
         raw_terminal_attr(&mut ios);
