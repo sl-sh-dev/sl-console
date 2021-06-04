@@ -1,15 +1,16 @@
 extern crate sl_console;
 
-use sl_console::console::*;
 use sl_console::event::*;
+use sl_console::*;
 use std::io::{self, Write};
 use std::thread;
 use std::time::Duration;
 
 fn main() {
-    let mut conin = conin().unwrap();
+    coninit().unwrap();
+    let mut conin = conin();
     conin.set_blocking(false); // Console to async read.
-    let mut conout = conout().unwrap();
+    let mut conout = conout();
     let _raw = conout.raw_mode_guard().unwrap();
 
     write!(

@@ -306,7 +306,7 @@ impl<C: ConsoleRead> AvailableColors for C {
 
 /// Detect a color using OSC 4.
 fn detect_color(conin: &mut dyn ConsoleRead, color: u16) -> io::Result<bool> {
-    let mut conout = conout()?;
+    let mut conout = conout_r()?;
     // Is the color available?
     // Use `ESC ] 4 ; color ; ? BEL`.
     write!(conout, "\x1B]4;{};?\x07", color)?;

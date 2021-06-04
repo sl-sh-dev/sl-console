@@ -1,13 +1,14 @@
 extern crate sl_console;
 
-use sl_console::console::*;
 use sl_console::cursor::{self, CursorPos};
 use sl_console::event::*;
 use sl_console::input::*;
+use sl_console::*;
 use std::io::Write;
 
 fn main() {
-    let mut console = conout().unwrap();
+    coninit().unwrap();
+    let mut console = conout();
     let _raw = console.raw_mode_guard().unwrap();
     let mut console = MouseTerminal::from(console);
 
@@ -19,7 +20,7 @@ fn main() {
     )
     .unwrap();
 
-    let mut conin = conin().unwrap();
+    let mut conin = conin();
     loop {
         let c = conin.get_event();
         let evt = c.unwrap();

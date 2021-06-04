@@ -2,12 +2,12 @@ extern crate sl_console;
 
 use sl_console::event::Key;
 use sl_console::input::TermRead;
-use sl_console::{conin, conout, ConsoleWrite};
+use sl_console::*;
 use std::io::Write;
 
-fn rainbow<W: Write>(stdout: &mut W, blue: u8) {
+fn rainbow<W: Write>(out: &mut W, blue: u8) {
     write!(
-        stdout,
+        out,
         "{}{}",
         sl_console::cursor::Goto(1, 1),
         sl_console::clear::All
@@ -19,25 +19,26 @@ fn rainbow<W: Write>(stdout: &mut W, blue: u8) {
         for green in 0..64 {
             let green = green * 4;
             write!(
-                stdout,
+                out,
                 "{} ",
                 sl_console::color::Bg(sl_console::color::Rgb(red, green, blue))
             )
             .unwrap();
         }
-        write!(stdout, "\n\r").unwrap();
+        write!(out, "\n\r").unwrap();
     }
 
-    writeln!(stdout, "{}b = {}", sl_console::style::Reset, blue).unwrap();
+    writeln!(out, "{}b = {}", sl_console::style::Reset, blue).unwrap();
 }
 
 fn main() {
-    let stdin = conin().unwrap();
-    let mut stdout = conout().unwrap();
-    let _raw = stdout.raw_mode_guard().unwrap();
+    coninit().unwrap();
+    let conin = conin();
+    let mut conout = conout();
+    let _raw = conout.raw_mode_guard().unwrap();
 
     writeln!(
-        stdout,
+        conout,
         "{}{}{}Use the up/down arrow keys to change the blue in the rainbow.",
         sl_console::clear::All,
         sl_console::cursor::Goto(1, 1),
@@ -47,21 +48,21 @@ fn main() {
 
     let mut blue = 172u8;
 
-    for c in stdin.keys() {
+    for c in conin.keys() {
         match c.unwrap() {
             Key::Up => {
                 blue = blue.saturating_add(4);
-                rainbow(&mut stdout, blue);
+                rainbow(&mut conout, blue);
             }
             Key::Down => {
                 blue = blue.saturating_sub(4);
-                rainbow(&mut stdout, blue);
+                rainbow(&mut conout, blue);
             }
             Key::Char('q') => break,
             _ => {}
         }
-        stdout.flush().unwrap();
+        conout.flush().unwrap();
     }
 
-    write!(stdout, "{}", sl_console::cursor::Show).unwrap();
+    write!(conout, "{}", sl_console::cursor::Show).unwrap();
 }

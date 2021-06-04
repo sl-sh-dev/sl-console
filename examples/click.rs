@@ -1,12 +1,13 @@
 extern crate sl_console;
 
-use sl_console::console::*;
 use sl_console::event::{Event, Key, MouseEvent};
 use sl_console::input::*;
+use sl_console::*;
 use std::io::Write; //MouseTerminal;
 
 fn main() {
-    let mut console = conout().unwrap();
+    coninit().unwrap();
+    let mut console = conout();
     let _raw = console.raw_mode_guard().unwrap();
     let mut console = MouseTerminal::from(console);
 
@@ -19,7 +20,7 @@ fn main() {
     .unwrap();
     console.flush().unwrap();
 
-    let conin = conin().unwrap();
+    let conin = conin();
     for c in conin.events() {
         //loop {
         //let c = console.get_event();

@@ -1,23 +1,24 @@
 extern crate sl_console;
 
 use sl_console::input::TermRead;
-use sl_console::{conin, conout, ConsoleWrite};
+use sl_console::*;
 use std::io::Write;
 
 fn main() {
-    let mut stdout = conout().unwrap();
-    let _raw = stdout.raw_mode_guard().unwrap();
-    let mut stdin = conin().unwrap();
+    coninit().unwrap();
+    let mut conout = conout();
+    let _raw = conout.raw_mode_guard().unwrap();
+    let mut conin = conin();
 
-    stdout.write_all(b"password: ").unwrap();
-    stdout.flush().unwrap();
+    conout.write_all(b"password: ").unwrap();
+    conout.flush().unwrap();
 
-    let pass = stdin.read_line();
+    let pass = conin.read_line();
 
     if let Ok(Some(pass)) = pass {
-        stdout.write_all(pass.as_bytes()).unwrap();
-        stdout.write_all(b"\n").unwrap();
+        conout.write_all(pass.as_bytes()).unwrap();
+        conout.write_all(b"\n").unwrap();
     } else {
-        stdout.write_all(b"Error\n").unwrap();
+        conout.write_all(b"Error\n").unwrap();
     }
 }

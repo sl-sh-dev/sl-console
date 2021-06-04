@@ -2,27 +2,28 @@ extern crate sl_console;
 
 use sl_console::event::Key;
 use sl_console::input::TermRead;
-use sl_console::{conin, conout, ConsoleWrite};
+use sl_console::*;
 use std::io::Write;
 
 fn main() {
-    let stdin = conin().unwrap();
-    let mut stdout = conout().unwrap();
-    let _raw = stdout.raw_mode_guard().unwrap();
+    coninit().unwrap();
+    let conin = conin();
+    let mut conout = conout();
+    let _raw = conout.raw_mode_guard().unwrap();
 
     write!(
-        stdout,
+        conout,
         "{}{}q to exit. Type stuff, use alt, and so on.{}",
         sl_console::clear::All,
         sl_console::cursor::Goto(1, 1),
         sl_console::cursor::Hide
     )
     .unwrap();
-    stdout.flush().unwrap();
+    conout.flush().unwrap();
 
-    for c in stdin.keys() {
+    for c in conin.keys() {
         write!(
-            stdout,
+            conout,
             "{}{}",
             sl_console::cursor::Goto(1, 1),
             sl_console::clear::CurrentLine
@@ -42,8 +43,8 @@ fn main() {
             Key::Backspace => println!("×"),
             _ => {}
         }
-        stdout.flush().unwrap();
+        conout.flush().unwrap();
     }
 
-    write!(stdout, "{}", sl_console::cursor::Show).unwrap();
+    write!(conout, "{}", sl_console::cursor::Show).unwrap();
 }

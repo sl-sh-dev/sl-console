@@ -169,7 +169,7 @@ impl<C: ConsoleRead> CursorPos for C {
         fn cursor_pos_inner(conin: &mut dyn ConsoleRead) -> io::Result<(u16, u16)> {
             let delimiter = b'R';
 
-            let mut conout = conout()?;
+            let mut conout = conout_r()?;
             // Where is the cursor?
             // Use `ESC [ 6 n`.
             write!(conout, "\x1B[6n")?;

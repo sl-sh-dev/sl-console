@@ -1,8 +1,13 @@
 extern crate sl_console;
 
-use sl_console::{color, style};
+use sl_console::{color, coninit, style};
 
 fn main() {
+    // Not using conin/conout so this is not needed on unix but on windows it
+    // will make sure that the console can handle escape codes.
+    // XXX Add a better way to enable escape codes on windows for something
+    // lightweight like this?
+    coninit().unwrap();
     println!("{}Red", color::Fg(color::Red));
     println!("{}Blue", color::Fg(color::Blue));
     println!("{}Blue'n'Bold{}", style::Bold, style::Reset);

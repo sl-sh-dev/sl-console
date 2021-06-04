@@ -35,6 +35,24 @@ lazy_static! {
     static ref CONSOLE_OUT: io::Result<ReentrantMutex<RefCell<ConsoleOut>>> = make_tty_out();
 }
 
+/// Initialize the console lib.
+///
+/// This will make sure that conin()/conout() will not panic.  It is safe
+/// to call multiple times and should always be called before conin()/conout()
+/// for the first time.  Do NOT call conin()/conout() if it returns an error,
+/// they will panic if the console is in an error state (note they should always
+/// work if coninit() returns Ok).  It is safe to call conin_r()/conout_r()
+/// even if coninit() is not used- they return a result so will not panic.
+pub fn coninit() -> io::Result<()> {
+    if let Err(err) = &*CONSOLE_IN {
+        return Err(io::Error::new(err.kind(), err));
+    }
+    if let Err(err) = &*CONSOLE_OUT {
+        return Err(io::Error::new(err.kind(), err));
+    }
+    Ok(())
+}
+
 /// Lock and return read side of the tty/console for the application.
 ///
 /// This provides a Read object that is connected to /dev/tty (unix) or
@@ -43,8 +61,9 @@ lazy_static! {
 /// from piped input would rarely make sense. In other words, if you pipe
 /// standard output from another process, it won't be reflected in the stream
 /// returned by this function, as this represents the TTY/console device, and
-/// not the piped standard input.
-pub fn conin<'a>() -> io::Result<ConsoleInLock<'a>> {
+/// not the piped standard input.  This version returns an Error if the console
+/// was not setup properly and coninit() is optional with it.
+pub fn conin_r<'a>() -> io::Result<ConsoleInLock<'a>> {
     match &*CONSOLE_IN {
         Ok(conin) => Ok(ConsoleInLock {
             inner: conin.lock(),
@@ -60,12 +79,61 @@ pub fn conin<'a>() -> io::Result<ConsoleInLock<'a>> {
 /// not the tty/console), but rather write to the TTY or console device.
 /// In other words, if you pipe standard output to another process things you
 /// write to conout() will not go into the pipe but will go to the terminal.
-pub fn conout<'a>() -> io::Result<ConsoleOutLock<'a>> {
+/// This version returns an Error if the console was not setup properly and
+/// coninit() is optional with it.
+pub fn conout_r<'a>() -> io::Result<ConsoleOutLock<'a>> {
     match &*CONSOLE_OUT {
         Ok(conout) => Ok(ConsoleOutLock {
             inner: conout.lock(),
         }),
         Err(err) => Err(io::Error::new(err.kind(), err)),
+    }
+}
+
+/// Lock and return read side of the tty/console for the application.
+///
+/// This provides a Read object that is connected to /dev/tty (unix) or
+/// the console (windows).  This will not read the piped standard input, but
+/// rather read from the TTY or console device, since reading asyncronized
+/// from piped input would rarely make sense. In other words, if you pipe
+/// standard output from another process, it won't be reflected in the stream
+/// returned by this function, as this represents the TTY/console device, and
+/// not the piped standard input.  This will always return the the locked
+/// input console, will panic if it does not exit.  Always call coninit() once
+/// and do not call conin() if it returns an error.
+pub fn conin<'a>() -> ConsoleInLock<'a> {
+    match &*CONSOLE_IN {
+        Ok(conin) => ConsoleInLock {
+            inner: conin.lock(),
+        },
+        Err(err) => {
+            eprintln!("Called conin() when no input console exists!");
+            eprintln!("Did you call coninit() first and check for an error?");
+            panic!("conin() failed: {}", err);
+        }
+    }
+}
+
+/// Lock and return write side of the tty/console for the application.
+///
+/// This provides a Write object that is connected to /dev/tty (unix) or
+/// the console (windows).  This will not write to standard output (if it is
+/// not the tty/console), but rather write to the TTY or console device.
+/// In other words, if you pipe standard output to another process things you
+/// write to conout() will not go into the pipe but will go to the terminal.
+/// This will always return the the locked output console, will panic if it
+/// does not exit.  Always call coninit() once and do not call conout() if it
+/// returns an error.
+pub fn conout<'a>() -> ConsoleOutLock<'a> {
+    match &*CONSOLE_OUT {
+        Ok(conout) => ConsoleOutLock {
+            inner: conout.lock(),
+        },
+        Err(err) => {
+            eprintln!("Called conout() when no output console exists!");
+            eprintln!("Did you call coninit() first and check for an error?");
+            panic!("conout() failed: {}", err);
+        }
     }
 }
 
@@ -77,7 +145,7 @@ pub struct RawModeGuard {
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
         if !self.old_raw {
-            if let Ok(mut conout) = conout() {
+            if let Ok(mut conout) = conout_r() {
                 if conout.raw_mode_off().is_err() {} // Ignore error in drop.
             }
         }
@@ -266,7 +334,7 @@ impl ConsoleWrite for ConsoleOut {
     fn raw_mode_off(&mut self) -> io::Result<()> {
         if self.raw_mode {
             self.raw_mode = false;
-            let conin = conin()?;
+            let conin = conin_r()?;
             self.syscon.suspend_raw_mode(&conin.inner.borrow().syscon)?;
         }
         Ok(())
@@ -275,7 +343,7 @@ impl ConsoleWrite for ConsoleOut {
     fn raw_mode_on(&mut self) -> io::Result<()> {
         if !self.raw_mode {
             self.raw_mode = true;
-            let conin = conin()?;
+            let conin = conin_r()?;
             self.syscon
                 .activate_raw_mode(&conin.inner.borrow().syscon)?;
         }
@@ -338,7 +406,7 @@ mod test {
 
     #[test]
     fn test_async_stdin() {
-        let mut tty = conin().unwrap();
+        let mut tty = conin_r().unwrap();
         tty.set_blocking(false);
         tty.bytes().next();
     }

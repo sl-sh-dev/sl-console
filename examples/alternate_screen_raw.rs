@@ -15,9 +15,10 @@ fn write_alt_screen_msg<W: Write>(screen: &mut W) {
 }
 
 fn main() {
-    let stdin = conin().unwrap();
-    let _raw = conout().unwrap().raw_mode_guard().unwrap();
-    let mut screen = AlternateScreen::from(conout().unwrap());
+    coninit().unwrap();
+    let stdin = conin();
+    let _raw = conout().raw_mode_guard().unwrap();
+    let mut screen = AlternateScreen::from(conout());
     write!(screen, "{}", sl_console::cursor::Hide).unwrap();
     write_alt_screen_msg(&mut screen);
 
