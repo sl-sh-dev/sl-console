@@ -16,7 +16,7 @@ use std::env;
 use std::fmt;
 use std::fmt::Debug;
 use std::io::{self, Write};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 /// The timeout of an escape code control sequence, in milliseconds.
 const CONTROL_SEQUENCE_TIMEOUT: u64 = 100;
@@ -316,19 +316,19 @@ fn detect_color(conin: &mut dyn ConsoleRead, color: u16) -> io::Result<bool> {
     let mut total_read = 0;
 
     let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT);
-    let now = SystemTime::now();
     let bell = 7u8;
 
     // Either consume all data up to bell or wait for a timeout.
-    while buf[0] != bell && now.elapsed().unwrap() < timeout {
-        match conin.read(&mut buf) {
-            Ok(b) => total_read += b,
-            // Don't error out on a would block- this just means no response since async.
-            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-            Err(err) => return Err(err),
+    if conin.poll_timeout(timeout) {
+        while buf[0] != bell {
+            match conin.read(&mut buf) {
+                Ok(b) => total_read += b,
+                // Don't error out on a would block- this just means no response since async.
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+                Err(err) => return Err(err),
+            }
         }
     }
-
     // If there was a response, the color is supported.
     Ok(total_read > 0)
 }
