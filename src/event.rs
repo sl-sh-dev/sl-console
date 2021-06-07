@@ -158,31 +158,38 @@ where
         Some(Ok(b'Z')) => Event::Key(Key::BackTab),
         Some(Ok(b'M')) => {
             // X10 emulation mouse encoding: ESC [ CB Cx Cy (6 characters only).
-            let mut next = || iter.next().unwrap().unwrap();
-
-            let cb = next() as i8 - 32;
-            // (1, 1) are the coords for upper left.
-            let cx = next().saturating_sub(32) as u16;
-            let cy = next().saturating_sub(32) as u16;
-            Event::Mouse(match cb & 0b11 {
-                0 => {
-                    if cb & 0x40 != 0 {
-                        MouseEvent::Press(MouseButton::WheelUp, cx, cy)
-                    } else {
-                        MouseEvent::Press(MouseButton::Left, cx, cy)
-                    }
+            let mut next = || -> Option<u8> {
+                if let Some(Ok(next)) = iter.next() {
+                    return Some(next);
                 }
-                1 => {
-                    if cb & 0x40 != 0 {
-                        MouseEvent::Press(MouseButton::WheelDown, cx, cy)
-                    } else {
-                        MouseEvent::Press(MouseButton::Middle, cx, cy)
+                None
+            };
+            if let (Some(cb), Some(cx), Some(cy)) = (next(), next(), next()) {
+                let cb = cb as i8 - 32;
+                let cx = cx.saturating_sub(32) as u16;
+                let cy = cy.saturating_sub(32) as u16;
+                Event::Mouse(match cb & 0b11 {
+                    0 => {
+                        if cb & 0x40 != 0 {
+                            MouseEvent::Press(MouseButton::WheelUp, cx, cy)
+                        } else {
+                            MouseEvent::Press(MouseButton::Left, cx, cy)
+                        }
                     }
-                }
-                2 => MouseEvent::Press(MouseButton::Right, cx, cy),
-                3 => MouseEvent::Release(cx, cy),
-                _ => return None,
-            })
+                    1 => {
+                        if cb & 0x40 != 0 {
+                            MouseEvent::Press(MouseButton::WheelDown, cx, cy)
+                        } else {
+                            MouseEvent::Press(MouseButton::Middle, cx, cy)
+                        }
+                    }
+                    2 => MouseEvent::Press(MouseButton::Right, cx, cy),
+                    3 => MouseEvent::Release(cx, cy),
+                    _ => return None,
+                })
+            } else {
+                return None;
+            }
         }
         Some(Ok(b'<')) => {
             // xterm mouse encoding:

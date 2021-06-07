@@ -206,7 +206,7 @@ impl<C: ConsoleRead> CursorPos for C {
                     return Err(Error::new(
                         ErrorKind::Other,
                         "Failed to parse coords from chars read from console.",
-                    ))
+                    ));
                 }
             }
             Err(Error::new(
