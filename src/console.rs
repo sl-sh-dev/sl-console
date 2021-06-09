@@ -63,11 +63,9 @@ pub fn coninit() -> io::Result<()> {
 /// returned by this function, as this represents the TTY/console device, and
 /// not the piped standard input.  This version returns an Error if the console
 /// was not setup properly and coninit() is optional with it.
-pub fn conin_r<'a>() -> io::Result<ConsoleInLock<'a>> {
+pub fn conin_r() -> io::Result<Conin> {
     match &*CONSOLE_IN {
-        Ok(conin) => Ok(ConsoleInLock {
-            inner: conin.lock(),
-        }),
+        Ok(conin) => Ok(Conin { inner: conin }),
         Err(err) => Err(io::Error::new(err.kind(), err)),
     }
 }
@@ -81,11 +79,9 @@ pub fn conin_r<'a>() -> io::Result<ConsoleInLock<'a>> {
 /// write to conout() will not go into the pipe but will go to the terminal.
 /// This version returns an Error if the console was not setup properly and
 /// coninit() is optional with it.
-pub fn conout_r<'a>() -> io::Result<ConsoleOutLock<'a>> {
+pub fn conout_r() -> io::Result<Conout> {
     match &*CONSOLE_OUT {
-        Ok(conout) => Ok(ConsoleOutLock {
-            inner: conout.lock(),
-        }),
+        Ok(conout) => Ok(Conout { inner: conout }),
         Err(err) => Err(io::Error::new(err.kind(), err)),
     }
 }
@@ -101,11 +97,9 @@ pub fn conout_r<'a>() -> io::Result<ConsoleOutLock<'a>> {
 /// not the piped standard input.  This will always return the the locked
 /// input console, will panic if it does not exit.  Always call coninit() once
 /// and do not call conin() if it returns an error.
-pub fn conin<'a>() -> ConsoleInLock<'a> {
+pub fn conin() -> Conin {
     match &*CONSOLE_IN {
-        Ok(conin) => ConsoleInLock {
-            inner: conin.lock(),
-        },
+        Ok(conin) => Conin { inner: conin },
         Err(err) => {
             eprintln!("Called conin() when no input console exists!");
             eprintln!("Did you call coninit() first and check for an error?");
@@ -124,11 +118,9 @@ pub fn conin<'a>() -> ConsoleInLock<'a> {
 /// This will always return the the locked output console, will panic if it
 /// does not exit.  Always call coninit() once and do not call conout() if it
 /// returns an error.
-pub fn conout<'a>() -> ConsoleOutLock<'a> {
+pub fn conout() -> Conout {
     match &*CONSOLE_OUT {
-        Ok(conout) => ConsoleOutLock {
-            inner: conout.lock(),
-        },
+        Ok(conout) => Conout { inner: conout },
         Err(err) => {
             eprintln!("Called conout() when no output console exists!");
             eprintln!("Did you call coninit() first and check for an error?");
@@ -204,6 +196,110 @@ pub trait ConsoleRead: Read {
     /// Assume this can be interupted.
     /// Returns true if the more data was ready, false if timed out.
     fn poll_timeout(&mut self, timeout: Duration) -> bool;
+}
+
+/// Represents the input side of the tty/console terminal.
+///
+/// This is a singleton that aquires a lock to access the console (similiar to
+/// Stdin).  It should be used to access the tty/terminal to avoid conflicts
+/// and other issues.
+pub struct Conin {
+    inner: &'static ReentrantMutex<RefCell<ConsoleIn>>,
+}
+
+impl Conin {
+    /// Locks the input console and returns a guard.
+    ///
+    /// Lock is released when the guard is dropped.
+    pub fn lock<'a>(&self) -> ConsoleInLock<'a> {
+        ConsoleInLock {
+            inner: self.inner.lock(),
+        }
+    }
+}
+
+impl ConsoleRead for Conin {
+    fn set_blocking(&mut self, blocking: bool) {
+        self.lock().set_blocking(blocking);
+    }
+
+    fn is_blocking(&self) -> bool {
+        self.lock().is_blocking()
+    }
+
+    fn get_event_and_raw(&mut self) -> io::Result<(Event, Vec<u8>)> {
+        self.lock().get_event_and_raw()
+    }
+
+    fn get_event(&mut self) -> io::Result<Event> {
+        self.lock().get_event()
+    }
+
+    fn get_key(&mut self) -> io::Result<Key> {
+        self.lock().get_key()
+    }
+
+    fn poll(&mut self) {
+        self.lock().poll();
+    }
+
+    fn poll_timeout(&mut self, timeout: Duration) -> bool {
+        self.lock().poll_timeout(timeout)
+    }
+}
+
+impl Read for Conin {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.lock().read(buf)
+    }
+}
+
+/// Represents the output side of the tty/console terminal.
+///
+/// This is a singleton that aquires a lock to access the console (similiar to
+/// Stdin).  It should be used to access the tty/terminal to avoid conflicts
+/// and other issues.
+pub struct Conout {
+    inner: &'static ReentrantMutex<RefCell<ConsoleOut>>,
+}
+
+impl Conout {
+    /// Locks the output console and returns a guard.
+    ///
+    /// Lock is released when the guard is dropped.
+    pub fn lock<'a>(&self) -> ConsoleOutLock<'a> {
+        ConsoleOutLock {
+            inner: self.inner.lock(),
+        }
+    }
+}
+
+impl ConsoleWrite for Conout {
+    fn raw_mode_off(&mut self) -> io::Result<()> {
+        self.lock().raw_mode_off()
+    }
+
+    fn raw_mode_on(&mut self) -> io::Result<()> {
+        self.lock().raw_mode_on()
+    }
+
+    fn raw_mode_guard(&mut self) -> io::Result<RawModeGuard> {
+        self.lock().raw_mode_guard()
+    }
+
+    fn is_raw_mode(&self) -> bool {
+        self.lock().is_raw_mode()
+    }
+}
+
+impl Write for Conout {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.lock().write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.lock().flush()
+    }
 }
 
 /// Represents the input side of the tty/console terminal.
@@ -334,7 +430,7 @@ impl ConsoleWrite for ConsoleOut {
     fn raw_mode_off(&mut self) -> io::Result<()> {
         if self.raw_mode {
             self.raw_mode = false;
-            let conin = conin_r()?;
+            let conin = conin_r()?.lock();
             self.syscon.suspend_raw_mode(&conin.inner.borrow().syscon)?;
         }
         Ok(())
@@ -343,7 +439,7 @@ impl ConsoleWrite for ConsoleOut {
     fn raw_mode_on(&mut self) -> io::Result<()> {
         if !self.raw_mode {
             self.raw_mode = true;
-            let conin = conin_r()?;
+            let conin = conin_r()?.lock();
             self.syscon
                 .activate_raw_mode(&conin.inner.borrow().syscon)?;
         }
