@@ -115,11 +115,7 @@ where
                 }
                 Some(Ok(b'[')) => {
                     // This is a CSI sequence.
-                    if let Some(e) = parse_csi(iter)? {
-                        e
-                    } else {
-                        return Err(error);
-                    }
+                    parse_csi(iter)?
                 }
                 Some(Ok(c)) => {
                     let ch = parse_utf8_char(c, iter)?;
@@ -155,14 +151,19 @@ where
 ///
 /// Returns None if an unrecognized sequence is found.
 // TODO make this return Result<Event, io::Error>
-fn parse_csi<I>(iter: &mut I) -> Result<Option<Event>, io::Error>
+fn parse_csi<I>(iter: &mut I) -> Result<Event, io::Error>
 where
     I: Iterator<Item = Result<u8, Error>>,
 {
-    Ok(Some(match iter.next() {
+    Ok(match iter.next() {
         Some(Ok(b'[')) => match iter.next() {
             Some(Ok(val @ b'A'..=b'E')) => Event::Key(Key::F(1 + val - b'A')),
-            _ => return Ok(None),
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Failed to parse csi code b'['",
+                ))
+            }
         },
         Some(Ok(b'D')) => Event::Key(Key::Left),
         Some(Ok(b'C')) => Event::Key(Key::Right),
@@ -173,10 +174,9 @@ where
         Some(Ok(b'Z')) => Event::Key(Key::BackTab),
         Some(Ok(b'M')) => {
             // X10 emulation mouse encoding: ESC [ CB Cx Cy (6 characters only).
-            let cb = next_char(iter);
-            let cx = next_char(iter);
-            let cy = next_char(iter);
-            if let (Some(cb), Some(cx), Some(cy)) = (cb, cx, cy) {
+            if let (Some(cb), Some(cx), Some(cy)) =
+                (next_char(iter), next_char(iter), next_char(iter))
+            {
                 let cb = cb as i8 - 32;
                 let cx = cx.saturating_sub(32) as u16;
                 let cy = cy.saturating_sub(32) as u16;
@@ -197,7 +197,12 @@ where
                     }
                     2 => MouseEvent::Press(MouseButton::Right, cx, cy),
                     3 => MouseEvent::Release(cx, cy),
-                    _ => return Ok(None),
+                    _ => {
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            "Failed to parse csi code b'M'",
+                        ))
+                    }
                 })
             } else {
                 return Err(Error::new(
@@ -238,15 +243,25 @@ where
                             match c {
                                 b'M' => MouseEvent::Press(button, cx, cy),
                                 b'm' => MouseEvent::Release(cx, cy),
-                                _ => return Ok(None),
+                                _ => {
+                                    return Err(Error::new(
+                                        ErrorKind::Other,
+                                        "Failed to parse csi code b'M' or b'm' after b'<'",
+                                    ))
+                                }
                             }
                         }
                         32 => MouseEvent::Hold(cx, cy),
                         3 => MouseEvent::Release(cx, cy),
-                        _ => return Ok(None),
+                        _ => {
+                            return Err(Error::new(
+                                ErrorKind::Other,
+                                "Failed to parse csi code as mouse event",
+                            ))
+                        }
                     };
 
-                    return Ok(Some(Event::Mouse(event)));
+                    return Ok(Event::Mouse(event));
                 }
             }
             return Err(Error::new(
@@ -284,7 +299,12 @@ where
                         35 => MouseEvent::Release(cx, cy),
                         64 => MouseEvent::Hold(cx, cy),
                         96 | 97 => MouseEvent::Press(MouseButton::WheelUp, cx, cy),
-                        _ => return Ok(None),
+                        _ => {
+                            return Err(Error::new(
+                                ErrorKind::Other,
+                                "Failed to parse csi code b'0'..=b'9' as mouse event",
+                            ))
+                        }
                     };
 
                     Event::Mouse(event)
@@ -298,13 +318,19 @@ where
                     let nums: Vec<u8> = str_buf.split(';').map(|n| n.parse().unwrap()).collect();
 
                     if nums.is_empty() {
-                        return Ok(None);
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            "Failed to parse csi b'~', buffer is empty",
+                        ));
                     }
 
-                    // TODO: handle multiple values for key modififiers (ex: values
+                    // TODO: handle multiple values for key modifiers (ex: values
                     // [3, 2] means Shift+Delete)
                     if nums.len() > 1 {
-                        return Ok(None);
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            "Multiple values for csi_code b'~' key modifiers not supported",
+                        ));
                     }
 
                     match nums[0] {
@@ -317,14 +343,29 @@ where
                         v @ 11..=15 => Event::Key(Key::F(v - 10)),
                         v @ 17..=21 => Event::Key(Key::F(v - 11)),
                         v @ 23..=24 => Event::Key(Key::F(v - 12)),
-                        _ => return Ok(None),
+                        _ => {
+                            return Err(Error::new(
+                                ErrorKind::Other,
+                                "Failed to parse csi code b'~', unexpected value",
+                            ))
+                        }
                     }
                 }
-                _ => return Ok(None),
+                _ => {
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        "Failed to parse csi code b'~'",
+                    ))
+                }
             }
         }
-        _ => return Ok(None),
-    }))
+        _ => {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Failed to parse input as csi code, unexpected value",
+            ))
+        }
+    })
 }
 
 /// Parse `c` as either a single byte ASCII char or a variable size UTF-8 char.
