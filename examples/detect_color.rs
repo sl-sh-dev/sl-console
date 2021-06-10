@@ -5,7 +5,7 @@ use sl_console::*;
 use std::io::*;
 
 fn main() {
-    coninit().unwrap();
+    con_init().unwrap();
     let mut term = conin();
     let count = term.available_colors().unwrap();
     let mut conout = conout();

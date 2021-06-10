@@ -32,7 +32,7 @@ fn rainbow<W: Write>(out: &mut W, blue: u8) {
 }
 
 fn main() {
-    coninit().unwrap();
+    con_init().unwrap();
     let conin = conin();
     let mut conout = conout();
     let _raw = conout.raw_mode_guard().unwrap();

@@ -6,7 +6,7 @@ use sl_console::*;
 use std::io::Write; //MouseTerminal;
 
 fn main() {
-    coninit().unwrap();
+    con_init().unwrap();
     let mut console = conout();
     let _raw = console.raw_mode_guard().unwrap();
     let mut console = MouseTerminal::from(console);

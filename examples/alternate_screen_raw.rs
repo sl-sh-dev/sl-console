@@ -15,7 +15,7 @@ fn write_alt_screen_msg<W: Write>(screen: &mut W) {
 }
 
 fn main() {
-    coninit().unwrap();
+    con_init().unwrap();
     let stdin = conin();
     let _raw = conout().raw_mode_guard().unwrap();
     let mut screen = AlternateScreen::from(conout());

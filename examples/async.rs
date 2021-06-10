@@ -7,7 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    coninit().unwrap();
+    con_init().unwrap();
     let mut conin = conin();
     conin.set_blocking(false); // Console to async read.
     let mut conout = conout();

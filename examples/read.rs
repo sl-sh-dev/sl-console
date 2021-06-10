@@ -5,7 +5,7 @@ use sl_console::*;
 use std::io::Write;
 
 fn main() {
-    coninit().unwrap();
+    con_init().unwrap();
     let mut conout = conout();
     let _raw = conout.raw_mode_guard().unwrap();
     let mut conin = conin();

@@ -1,4 +1,17 @@
-//! Support access to the tty/console.
+//! Support access to the console.
+//!
+//! The input and output are split and are accessed in a way very similiar to
+//! stdin/stdout with a similiar interface.  The console will be attached to
+//! /dev/tty on unix and CONIN$/CONOUT$ on Windows.  This means it bypasses
+//! stdin/out, if they were not redirected then they should be the same but
+//! even if redirected conin()/conout() will attach to the tty or console
+//! directly.
+//!
+//! The con_init() function should be called once (it is safe to call multiple
+//! times) and if it returns an error then no tty/console is available.  If
+//! con_init() fails then calls to conin()/conout() will panic.  It is safe to
+//! call conin_r()/conout_r() but you will have to deal with the error and
+//! conin()/conout() will always work if con_init() was successful.
 
 use std::cell::RefCell;
 use std::io::{self, Read, Write};
@@ -43,7 +56,7 @@ lazy_static! {
 /// they will panic if the console is in an error state (note they should always
 /// work if coninit() returns Ok).  It is safe to call conin_r()/conout_r()
 /// even if coninit() is not used- they return a result so will not panic.
-pub fn coninit() -> io::Result<()> {
+pub fn con_init() -> io::Result<()> {
     if let Err(err) = &*CONSOLE_IN {
         return Err(io::Error::new(err.kind(), err));
     }
@@ -136,9 +149,12 @@ pub struct RawModeGuard {
 
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
-        if !self.old_raw {
-            if let Ok(mut conout) = conout_r() {
-                if conout.raw_mode_off().is_err() {} // Ignore error in drop.
+        // Ignore error in drop.
+        // Also ignore if we can not get a lock on either conin or conout.
+        if let Some(mut conout) = conout().try_lock() {
+            if self.old_raw {
+                if conout.raw_mode_on().is_err() {}
+            } else if conout.raw_mode_off().is_err() {
             }
         }
     }
@@ -147,12 +163,31 @@ impl Drop for RawModeGuard {
 /// Console output trait.
 pub trait ConsoleWrite: Write {
     /// Switch to original (non-raw) mode
+    ///
+    /// This call needs to also lock the conin (conout will have been locked
+    /// already).  If it can not lock conin it will return an error of kind
+    /// WouldBlock.
     fn raw_mode_off(&mut self) -> io::Result<()>;
-    /// Switch to raw mode
+
+    /// Switch to raw mode.
+    ///
+    /// This call needs to also lock the conin (conout will have been locked
+    /// already).  If it can not lock conin it will return an error of kind
+    /// WouldBlock.
     fn raw_mode_on(&mut self) -> io::Result<()>;
+
     /// Switch to raw mode and return a RAII guard to switch to previous mode
     /// when scope ends.
+    ///
+    /// This call needs to also lock the conin (conout will have been locked
+    /// already).  If it can not lock conin it will return an error of kind
+    /// WouldBlock.
+    /// The returned guard might fail to restore the raw mode when the
+    /// console is being used on multiple threads.  If it can not get the
+    /// lock on conin and conout on drop it will silently do nothing.  Use
+    /// raw_mode_on/off directly when this might be an issue.
     fn raw_mode_guard(&mut self) -> io::Result<RawModeGuard>;
+
     /// True if in raw mode.
     fn is_raw_mode(&self) -> bool;
 }
@@ -216,6 +251,16 @@ impl Conin {
             inner: self.inner.lock(),
         }
     }
+
+    /// Tries to lock the input console and returns Some(guard) if it could or
+    /// None if it could not.  If the lock is already held by another thread
+    /// then it will return None.  Underlying lock is a ReentrantMutex from
+    /// parking lot so will be fine to use on the same thread.
+    ///
+    /// Lock is released when the guard is dropped.
+    pub fn try_lock<'a>(&self) -> Option<ConsoleInLock<'a>> {
+        self.inner.try_lock().map(|inner| ConsoleInLock { inner })
+    }
 }
 
 impl ConsoleRead for Conin {
@@ -271,6 +316,16 @@ impl Conout {
         ConsoleOutLock {
             inner: self.inner.lock(),
         }
+    }
+
+    /// Tries to lock the output console and returns Some(guard) if it could or
+    /// None if it could not.  If the lock is already held by another thread
+    /// then it will return None.  Underlying lock is a ReentrantMutex from
+    /// parking lot so will be fine to use on the same thread.
+    ///
+    /// Lock is released when the guard is dropped.
+    pub fn try_lock<'a>(&self) -> Option<ConsoleOutLock<'a>> {
+        self.inner.try_lock().map(|inner| ConsoleOutLock { inner })
     }
 }
 
@@ -429,21 +484,37 @@ impl<'a> Read for ConsoleInLock<'a> {
 impl ConsoleWrite for ConsoleOut {
     fn raw_mode_off(&mut self) -> io::Result<()> {
         if self.raw_mode {
-            self.raw_mode = false;
-            let conin = conin_r()?.lock();
-            self.syscon.suspend_raw_mode(&conin.inner.borrow().syscon)?;
+            if let Some(conin) = conin_r()?.try_lock() {
+                self.syscon.suspend_raw_mode(&conin.inner.borrow().syscon)?;
+                self.raw_mode = false;
+                Ok(())
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "Conin is already locked.",
+                ))
+            }
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     fn raw_mode_on(&mut self) -> io::Result<()> {
         if !self.raw_mode {
-            self.raw_mode = true;
-            let conin = conin_r()?.lock();
-            self.syscon
-                .activate_raw_mode(&conin.inner.borrow().syscon)?;
+            if let Some(conin) = conin_r()?.try_lock() {
+                self.syscon
+                    .activate_raw_mode(&conin.inner.borrow().syscon)?;
+                self.raw_mode = true;
+                Ok(())
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "Conin is already locked.",
+                ))
+            }
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     fn raw_mode_guard(&mut self) -> io::Result<RawModeGuard> {
