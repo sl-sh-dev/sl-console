@@ -1,7 +1,7 @@
 //! Mouse and key events.
 
 use std::io::{Error, ErrorKind};
-use std::str;
+use std::{io, str};
 
 /// An event reported by the terminal.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -115,7 +115,11 @@ where
                 }
                 Some(Ok(b'[')) => {
                     // This is a CSI sequence.
-                    parse_csi(iter).ok_or(error)?
+                    if let Some(e) = parse_csi(iter)? {
+                        e
+                    } else {
+                        return Err(error);
+                    }
                 }
                 Some(Ok(c)) => {
                     let ch = parse_utf8_char(c, iter)?;
@@ -137,17 +141,28 @@ where
     }
 }
 
-/// Parses a CSI sequence, just after reading ^[
-///
-/// Returns None if an unrecognized sequence is found.
-fn parse_csi<I>(iter: &mut I) -> Option<Event>
+fn next_char<I>(iter: &mut I) -> Option<u8>
 where
     I: Iterator<Item = Result<u8, Error>>,
 {
-    Some(match iter.next() {
+    if let Some(Ok(next)) = iter.next() {
+        return Some(next);
+    }
+    None
+}
+
+/// Parses a CSI sequence, just after reading ^[
+///
+/// Returns None if an unrecognized sequence is found.
+// TODO make this return Result<Event, io::Error>
+fn parse_csi<I>(iter: &mut I) -> Result<Option<Event>, io::Error>
+where
+    I: Iterator<Item = Result<u8, Error>>,
+{
+    Ok(Some(match iter.next() {
         Some(Ok(b'[')) => match iter.next() {
             Some(Ok(val @ b'A'..=b'E')) => Event::Key(Key::F(1 + val - b'A')),
-            _ => return None,
+            _ => return Ok(None),
         },
         Some(Ok(b'D')) => Event::Key(Key::Left),
         Some(Ok(b'C')) => Event::Key(Key::Right),
@@ -158,13 +173,10 @@ where
         Some(Ok(b'Z')) => Event::Key(Key::BackTab),
         Some(Ok(b'M')) => {
             // X10 emulation mouse encoding: ESC [ CB Cx Cy (6 characters only).
-            let mut next = || -> Option<u8> {
-                if let Some(Ok(next)) = iter.next() {
-                    return Some(next);
-                }
-                None
-            };
-            if let (Some(cb), Some(cx), Some(cy)) = (next(), next(), next()) {
+            let cb = next_char(iter);
+            let cx = next_char(iter);
+            let cy = next_char(iter);
+            if let (Some(cb), Some(cx), Some(cy)) = (cb, cx, cy) {
                 let cb = cb as i8 - 32;
                 let cx = cx.saturating_sub(32) as u16;
                 let cy = cy.saturating_sub(32) as u16;
@@ -185,50 +197,62 @@ where
                     }
                     2 => MouseEvent::Press(MouseButton::Right, cx, cy),
                     3 => MouseEvent::Release(cx, cy),
-                    _ => return None,
+                    _ => return Ok(None),
                 })
             } else {
-                return None;
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Failed to parse X10 emulation mouse encoding. Expected: ESC [ CB Cx Cy (6 characters only)."
+                ));
             }
         }
         Some(Ok(b'<')) => {
             // xterm mouse encoding:
             // ESC [ < Cb ; Cx ; Cy (;) (M or m)
             let mut buf = Vec::new();
-            let mut c = iter.next().unwrap().unwrap();
-            while !matches!(c, b'm' | b'M') {
-                buf.push(c);
-                c = iter.next().unwrap().unwrap();
-            }
-            let str_buf = String::from_utf8(buf).unwrap();
-            let nums = &mut str_buf.split(';');
-
-            let cb = nums.next().unwrap().parse::<u16>().unwrap();
-            let cx = nums.next().unwrap().parse::<u16>().unwrap();
-            let cy = nums.next().unwrap().parse::<u16>().unwrap();
-
-            let event = match cb {
-                0..=2 | 64..=65 => {
-                    let button = match cb {
-                        0 => MouseButton::Left,
-                        1 => MouseButton::Middle,
-                        2 => MouseButton::Right,
-                        64 => MouseButton::WheelUp,
-                        65 => MouseButton::WheelDown,
-                        _ => unreachable!(),
-                    };
-                    match c {
-                        b'M' => MouseEvent::Press(button, cx, cy),
-                        b'm' => MouseEvent::Release(cx, cy),
-                        _ => return None,
+            if let Some(mut c) = next_char(iter) {
+                while !matches!(c, b'm' | b'M') {
+                    buf.push(c);
+                    if let Some(new_c) = next_char(iter) {
+                        c = new_c
                     }
                 }
-                32 => MouseEvent::Hold(cx, cy),
-                3 => MouseEvent::Release(cx, cy),
-                _ => return None,
-            };
+                if !buf.is_empty() {
+                    let str_buf = String::from_utf8(buf).unwrap();
+                    let nums = &mut str_buf.split(';');
 
-            Event::Mouse(event)
+                    let cb = nums.next().unwrap().parse::<u16>().unwrap();
+                    let cx = nums.next().unwrap().parse::<u16>().unwrap();
+                    let cy = nums.next().unwrap().parse::<u16>().unwrap();
+
+                    let event = match cb {
+                        0..=2 | 64..=65 => {
+                            let button = match cb {
+                                0 => MouseButton::Left,
+                                1 => MouseButton::Middle,
+                                2 => MouseButton::Right,
+                                64 => MouseButton::WheelUp,
+                                65 => MouseButton::WheelDown,
+                                _ => unreachable!(),
+                            };
+                            match c {
+                                b'M' => MouseEvent::Press(button, cx, cy),
+                                b'm' => MouseEvent::Release(cx, cy),
+                                _ => return Ok(None),
+                            }
+                        }
+                        32 => MouseEvent::Hold(cx, cy),
+                        3 => MouseEvent::Release(cx, cy),
+                        _ => return Ok(None),
+                    };
+
+                    return Ok(Some(Event::Mouse(event)));
+                }
+            }
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Failed to parse xterm mouse encoding. Expected: ESC [ < Cb ; Cx ; Cy (;) (M or m)",
+            ));
         }
         Some(Ok(c @ b'0'..=b'9')) => {
             // Numbered escape code.
@@ -260,7 +284,7 @@ where
                         35 => MouseEvent::Release(cx, cy),
                         64 => MouseEvent::Hold(cx, cy),
                         96 | 97 => MouseEvent::Press(MouseButton::WheelUp, cx, cy),
-                        _ => return None,
+                        _ => return Ok(None),
                     };
 
                     Event::Mouse(event)
@@ -274,13 +298,13 @@ where
                     let nums: Vec<u8> = str_buf.split(';').map(|n| n.parse().unwrap()).collect();
 
                     if nums.is_empty() {
-                        return None;
+                        return Ok(None);
                     }
 
                     // TODO: handle multiple values for key modififiers (ex: values
                     // [3, 2] means Shift+Delete)
                     if nums.len() > 1 {
-                        return None;
+                        return Ok(None);
                     }
 
                     match nums[0] {
@@ -293,14 +317,14 @@ where
                         v @ 11..=15 => Event::Key(Key::F(v - 10)),
                         v @ 17..=21 => Event::Key(Key::F(v - 11)),
                         v @ 23..=24 => Event::Key(Key::F(v - 12)),
-                        _ => return None,
+                        _ => return Ok(None),
                     }
                 }
-                _ => return None,
+                _ => return Ok(None),
             }
         }
-        _ => return None,
-    })
+        _ => return Ok(None),
+    }))
 }
 
 /// Parse `c` as either a single byte ASCII char or a variable size UTF-8 char.
