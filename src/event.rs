@@ -317,37 +317,34 @@ where
                     // numbers.
                     let nums: Vec<u8> = str_buf.split(';').map(|n| n.parse().unwrap()).collect();
 
-                    if nums.is_empty() {
-                        return Err(Error::new(
-                            ErrorKind::Other,
-                            "Failed to parse csi b'~', buffer is empty",
-                        ));
-                    }
-
-                    // TODO: handle multiple values for key modifiers (ex: values
-                    // [3, 2] means Shift+Delete)
-                    if nums.len() > 1 {
-                        return Err(Error::new(
-                            ErrorKind::Other,
-                            "Multiple values for csi_code b'~' key modifiers not supported",
-                        ));
-                    }
-
-                    match nums[0] {
-                        1 | 7 => Event::Key(Key::Home),
-                        2 => Event::Key(Key::Insert),
-                        3 => Event::Key(Key::Delete),
-                        4 | 8 => Event::Key(Key::End),
-                        5 => Event::Key(Key::PageUp),
-                        6 => Event::Key(Key::PageDown),
-                        v @ 11..=15 => Event::Key(Key::F(v - 10)),
-                        v @ 17..=21 => Event::Key(Key::F(v - 11)),
-                        v @ 23..=24 => Event::Key(Key::F(v - 12)),
-                        _ => {
+                    match nums.len() {
+                        0 => {
                             return Err(Error::new(
                                 ErrorKind::Other,
-                                "Failed to parse csi code b'~', unexpected value",
+                                "Failed to parse csi b'~', buffer is empty",
                             ))
+                        }
+                        1 => match nums[0] {
+                            1 | 7 => Event::Key(Key::Home),
+                            2 => Event::Key(Key::Insert),
+                            3 => Event::Key(Key::Delete),
+                            4 | 8 => Event::Key(Key::End),
+                            5 => Event::Key(Key::PageUp),
+                            6 => Event::Key(Key::PageDown),
+                            v @ 11..=15 => Event::Key(Key::F(v - 10)),
+                            v @ 17..=21 => Event::Key(Key::F(v - 11)),
+                            v @ 23..=24 => Event::Key(Key::F(v - 12)),
+                            _ => {
+                                return Err(Error::new(
+                                    ErrorKind::Other,
+                                    "Failed to parse csi code b'~', unexpected value",
+                                ))
+                            }
+                        },
+                        _ => {
+                            // TODO: handle multiple values for key modifiers (ex: values
+                            // [3, 2] means Shift+Delete)
+                            return Ok(Event::Unsupported(nums));
                         }
                     }
                 }
