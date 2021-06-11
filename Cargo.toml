@@ -20,12 +20,8 @@ lazy_static = "1.4.0"
 parking_lot = "0.11"
 scopeguard = "1.1.0"
 
-[target.'cfg(all(not(target_os = "redox"), not(windows)))'.dependencies]
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"
-
-[target.'cfg(target_os = "redox")'.dependencies]
-redox_syscall = "0.2"
-redox_termios = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version =  "0.3.9", features = ["winbase", "consoleapi", "processenv"] }
