@@ -150,8 +150,7 @@ where
 
 /// Parses a CSI sequence, just after reading ^[
 ///
-/// Returns None if an unrecognized sequence is found.
-// TODO make this return Result<Event, io::Error>
+/// Returns Result<Event, io::Error, Event may be unsupported.
 fn parse_csi<I>(iter: &mut I) -> Result<Event, io::Error>
 where
     I: Iterator<Item = Result<u8, Error>>,
@@ -408,7 +407,7 @@ where
                     bytes.push(next);
                     if let Ok(st) = str::from_utf8(bytes) {
                         if let Some(c) = st.chars().next() {
-                            return Ok(c)
+                            return Ok(c);
                         }
                     }
                     if bytes.len() >= 4 {
