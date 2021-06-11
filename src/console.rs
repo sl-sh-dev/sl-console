@@ -143,6 +143,11 @@ pub fn conout() -> Conout {
 }
 
 /// RAII guard for entering raw mode, will restore previous mode when dropped.
+///
+/// The returned guard might fail to restore the raw mode when the
+/// console is being used on multiple threads.  If it can not get the
+/// locks on conin and conout on drop it will silently do nothing.  Use
+/// raw_mode_on/off directly when this might be an issue.
 pub struct RawModeGuard {
     old_raw: bool,
 }
@@ -184,7 +189,7 @@ pub trait ConsoleWrite: Write {
     /// WouldBlock.
     /// The returned guard might fail to restore the raw mode when the
     /// console is being used on multiple threads.  If it can not get the
-    /// lock on conin and conout on drop it will silently do nothing.  Use
+    /// locks on conin and conout on drop it will silently do nothing.  Use
     /// raw_mode_on/off directly when this might be an issue.
     fn raw_mode_guard(&mut self) -> io::Result<RawModeGuard>;
 

@@ -1,5 +1,3 @@
-extern crate sl_console;
-
 use sl_console::event::{Event, Key, MouseEvent};
 use sl_console::input::*;
 use sl_console::*;

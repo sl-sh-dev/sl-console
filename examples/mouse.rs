@@ -1,5 +1,3 @@
-extern crate sl_console;
-
 use sl_console::cursor::{self, CursorPos};
 use sl_console::event::*;
 use sl_console::input::*;

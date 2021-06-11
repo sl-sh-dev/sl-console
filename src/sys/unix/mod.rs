@@ -1,8 +1,6 @@
-extern crate libc;
-
 use std::io;
 
-pub use self::libc::termios as Termios;
+pub use libc::termios as Termios;
 
 pub mod attr;
 pub mod console;

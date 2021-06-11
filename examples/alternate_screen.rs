@@ -1,5 +1,3 @@
-extern crate sl_console;
-
 use sl_console::screen::*;
 use sl_console::{con_init, conout};
 use std::io::Write;

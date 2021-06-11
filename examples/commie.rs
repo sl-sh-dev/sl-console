@@ -1,5 +1,3 @@
-extern crate sl_console;
-
 use sl_console::{clear, color, cursor};
 
 use std::{thread, time};

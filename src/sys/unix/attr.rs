@@ -1,7 +1,7 @@
 use std::{io, mem};
 
-use super::libc::c_int;
 use super::{cvt, Termios};
+use libc::c_int;
 
 extern "C" {
     pub fn tcgetattr(fd: c_int, termptr: *mut Termios) -> c_int;

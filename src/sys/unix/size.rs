@@ -1,7 +1,7 @@
 use std::{io, mem};
 
 use super::cvt;
-use super::libc::{c_ushort, ioctl, STDOUT_FILENO, TIOCGWINSZ};
+use libc::{c_ushort, ioctl, STDOUT_FILENO, TIOCGWINSZ};
 
 #[repr(C)]
 struct TermSize {

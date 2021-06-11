@@ -1,5 +1,3 @@
-extern crate sl_console;
-
 use sl_console::{color, con_init, style};
 
 fn main() {

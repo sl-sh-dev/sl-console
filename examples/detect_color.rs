@@ -1,5 +1,3 @@
-extern crate sl_console;
-
 use sl_console::color::{AnsiValue, AvailableColors, Bg};
 use sl_console::*;
 use std::io::*;
