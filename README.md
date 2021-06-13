@@ -228,7 +228,7 @@ fn main() {
 
 See `examples/`, and the documentation, which can be rendered using `cargo doc`.
 
-For a more complete example (termion not sl-console), see [a minesweeper implementation](https://github.com/redox-os/games-for-redox/blob/master/src/minesweeper/main.rs), that was made for Redox using termion.
+For a more complete example, see [a minesweeper implementation](https://github.com/sl-sh-dev/sl-console/blob/master/examples/minesweeper.rs).  This was ported from [redox games minesweeper](https://gitlab.redox-os.org/redox-os/games/-/tree/master/src/minesweeper).
 
 <img src="image.png" width="200">
 
