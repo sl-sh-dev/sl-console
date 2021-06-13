@@ -182,9 +182,31 @@ const ENTER_MOUSE_SEQUENCE: &str = csi!("?1000h\x1b[?1002h\x1b[?1015h\x1b[?1006h
 /// A sequence of escape codes to disable terminal mouse support.
 const EXIT_MOUSE_SEQUENCE: &str = csi!("?1006l\x1b[?1015l\x1b[?1002l\x1b[?1000l");
 
+/// Extension trait for ConsoleWrite to turn mouse support on or off for the console.
+pub trait ConsoleMouseExt {
+    /// Turn mouse support on for the console.
+    fn mouse_on(&mut self) -> io::Result<()>;
+
+    /// Turn mouse support off for the console.
+    fn mouse_off(&mut self) -> io::Result<()>;
+}
+
+impl<W: ConsoleWrite> ConsoleMouseExt for W {
+    fn mouse_on(&mut self) -> io::Result<()> {
+        self.write_all(ENTER_MOUSE_SEQUENCE.as_bytes())?;
+        Ok(())
+    }
+
+    fn mouse_off(&mut self) -> io::Result<()> {
+        self.write_all(EXIT_MOUSE_SEQUENCE.as_bytes())?;
+        Ok(())
+    }
+}
+
 /// A terminal with added mouse support.
 ///
 /// This can be obtained through the `From` implementations.
+/// You can use this if you want an RAII guard around terminal mouse support.
 pub struct MouseTerminal<W: ConsoleWrite> {
     term: W,
 }
@@ -224,6 +246,24 @@ impl<W: ConsoleWrite> Write for MouseTerminal<W> {
 
     fn flush(&mut self) -> io::Result<()> {
         self.term.flush()
+    }
+}
+
+impl<W: ConsoleWrite> ConsoleWrite for MouseTerminal<W> {
+    fn raw_mode_off(&mut self) -> io::Result<()> {
+        self.term.raw_mode_off()
+    }
+
+    fn raw_mode_on(&mut self) -> io::Result<()> {
+        self.term.raw_mode_on()
+    }
+
+    fn raw_mode_guard(&mut self) -> io::Result<crate::console::RawModeGuard> {
+        self.term.raw_mode_guard()
+    }
+
+    fn is_raw_mode(&self) -> bool {
+        self.term.is_raw_mode()
     }
 }
 

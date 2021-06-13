@@ -254,7 +254,7 @@ impl<C: Color> fmt::Display for Bg<C> {
     }
 }
 
-/// Extension to `Console` trait for getting available colors.
+/// Extension to `ConsoleRead` trait for getting available colors.
 pub trait AvailableColors {
     /// How many ANSI colors are supported (from 8 to 256)?
     ///

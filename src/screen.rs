@@ -6,11 +6,12 @@
 //! # Example
 //!
 //! ```rust
+//! use sl_console::conout;
 //! use sl_console::screen::AlternateScreen;
 //! use std::io::{Write, stdout};
 //!
 //!     {
-//!         let mut screen = AlternateScreen::from(stdout());
+//!         let mut screen = AlternateScreen::from(conout());
 //!         write!(screen, "Writing to alternate screen!").unwrap();
 //!         screen.flush().unwrap();
 //!     }
@@ -20,6 +21,8 @@
 use std::fmt;
 use std::io::{self, Write};
 use std::ops;
+
+use crate::console::ConsoleWrite;
 
 /// Switch to the main screen buffer of the terminal.
 pub struct ToMainScreen;
@@ -44,12 +47,12 @@ impl fmt::Display for ToAlternateScreen {
 ///
 /// This is achieved by switching the terminal to the alternate screen on creation and
 /// automatically switching it back to the original screen on drop.
-pub struct AlternateScreen<W: Write> {
+pub struct AlternateScreen<W: ConsoleWrite> {
     /// The output target.
     output: W,
 }
 
-impl<W: Write> AlternateScreen<W> {
+impl<W: ConsoleWrite> AlternateScreen<W> {
     /// Create an alternate screen wrapper struct for the provided output and switch the terminal
     /// to the alternate screen.
     pub fn from(mut output: W) -> Self {
@@ -58,13 +61,13 @@ impl<W: Write> AlternateScreen<W> {
     }
 }
 
-impl<W: Write> Drop for AlternateScreen<W> {
+impl<W: ConsoleWrite> Drop for AlternateScreen<W> {
     fn drop(&mut self) {
         write!(self, "{}", ToMainScreen).expect("switch to main screen");
     }
 }
 
-impl<W: Write> ops::Deref for AlternateScreen<W> {
+impl<W: ConsoleWrite> ops::Deref for AlternateScreen<W> {
     type Target = W;
 
     fn deref(&self) -> &W {
@@ -72,18 +75,36 @@ impl<W: Write> ops::Deref for AlternateScreen<W> {
     }
 }
 
-impl<W: Write> ops::DerefMut for AlternateScreen<W> {
+impl<W: ConsoleWrite> ops::DerefMut for AlternateScreen<W> {
     fn deref_mut(&mut self) -> &mut W {
         &mut self.output
     }
 }
 
-impl<W: Write> Write for AlternateScreen<W> {
+impl<W: ConsoleWrite> Write for AlternateScreen<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.output.write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
         self.output.flush()
+    }
+}
+
+impl<W: ConsoleWrite> ConsoleWrite for AlternateScreen<W> {
+    fn raw_mode_off(&mut self) -> io::Result<()> {
+        self.output.raw_mode_off()
+    }
+
+    fn raw_mode_on(&mut self) -> io::Result<()> {
+        self.output.raw_mode_on()
+    }
+
+    fn raw_mode_guard(&mut self) -> io::Result<crate::console::RawModeGuard> {
+        self.output.raw_mode_guard()
+    }
+
+    fn is_raw_mode(&self) -> bool {
+        self.output.is_raw_mode()
     }
 }

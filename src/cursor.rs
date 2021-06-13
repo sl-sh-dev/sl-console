@@ -263,3 +263,20 @@ impl<W: Write> Write for HideCursor<W> {
         self.output.flush()
     }
 }
+
+/// Return the current cursor position.
+///
+/// This is convience wrapper.
+pub fn cursor_pos() -> io::Result<(u16, u16)> {
+    conin_r()?.cursor_pos()
+}
+
+/// Move the cursor to (x, y).
+///
+/// This a convience wrapper.
+pub fn goto(x: u16, y: u16) -> io::Result<()> {
+    let mut conout = conout_r()?.lock();
+    write!(conout, "{}", Goto(x, y))?;
+    conout.flush()?;
+    Ok(())
+}
