@@ -95,9 +95,9 @@ impl<R: Read> Iterator for EventsAndRaw<R> {
     }
 }
 
-fn parse_event<I>(item: u8, iter: &mut I) -> Result<(Event, Vec<u8>), io::Error>
+fn parse_event<I>(item: u8, iter: &mut I) -> io::Result<(Event, Vec<u8>)>
 where
-    I: Iterator<Item = Result<u8, io::Error>>,
+    I: Iterator<Item = io::Result<u8>>,
 {
     let mut buf = vec![item];
     let result = {

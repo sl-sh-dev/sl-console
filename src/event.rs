@@ -98,13 +98,13 @@ pub enum Key {
 }
 
 /// Parse an Event from `item` and possibly subsequent bytes through `iter`.
-pub fn parse_event<I>(item: u8, iter: &mut I) -> Result<Event, Error>
+pub fn parse_event<I>(item: u8, iter: &mut I) -> io::Result<Event>
 where
-    I: Iterator<Item = Result<u8, Error>>,
+    I: Iterator<Item = io::Result<u8>>,
 {
-    fn inner_parse_event<I>(item: u8, iter: &mut I) -> Result<Event, Error>
+    fn inner_parse_event<I>(item: u8, iter: &mut I) -> io::Result<Event>
     where
-        I: Iterator<Item = Result<u8, Error>>,
+        I: Iterator<Item = io::Result<u8>>,
     {
         match item {
             b'\x1B' => {
@@ -411,14 +411,10 @@ where
 }
 
 /// Parse `c` as either a single byte ASCII char or a variable size UTF-8 char.
-fn parse_utf8_char<I>(c: u8, iter: &mut I) -> Result<char, Error>
+fn parse_utf8_char<I>(c: u8, iter: &mut I) -> io::Result<char>
 where
-    I: Iterator<Item = Result<u8, Error>>,
+    I: Iterator<Item = io::Result<u8>>,
 {
-    let error = Err(Error::new(
-        ErrorKind::Other,
-        "Input character is not valid UTF-8",
-    ));
     if c.is_ascii() {
         Ok(c as char)
     } else {
@@ -435,10 +431,18 @@ where
                         }
                     }
                     if bytes.len() >= 4 {
-                        return error;
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            "Input character is not valid UTF-8",
+                        ));
                     }
                 }
-                _ => return error,
+                _ => {
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        "Input character is not valid UTF-8",
+                    ))
+                }
             }
         }
     }

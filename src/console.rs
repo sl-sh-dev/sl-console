@@ -405,8 +405,10 @@ impl ConsoleRead for ConsoleIn {
     fn get_event_and_raw(&mut self) -> io::Result<(Event, Vec<u8>)> {
         let mut leftover = self.leftover.take();
         if let Some(er) = event_and_raw(self, &mut leftover) {
+            self.leftover = leftover;
             er
         } else {
+            self.leftover = leftover;
             Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
                 "Event stream would block",
