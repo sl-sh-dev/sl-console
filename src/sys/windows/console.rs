@@ -5,8 +5,8 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::iter::once;
 use std::os::windows::ffi::OsStrExt;
-use std::os::windows::io::AsRawHandle;
 use std::os::windows::io::FromRawHandle;
+use std::os::windows::io::{AsRawHandle, RawHandle};
 use std::ptr::null_mut;
 use std::thread;
 use std::time::Duration;
@@ -152,7 +152,7 @@ impl SysConsoleIn {
     /// Read from the byte stream.
     ///
     /// This version blocks, the read from the Read trait does not.
-    pub fn read_block(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    pub(crate) fn read_block(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut total = 0;
 
         if buf.is_empty() {
@@ -240,5 +240,17 @@ impl Write for SysConsoleOut {
     fn flush(&mut self) -> io::Result<()> {
         self.tty.flush()
         //io::stdout().flush()
+    }
+}
+
+impl AsRawHandle for SysConsoleOut {
+    fn as_raw_handle(&self) -> RawHandle {
+        self.tty.as_raw_handle()
+    }
+}
+
+impl AsRawHandle for SysConsoleIn {
+    fn as_raw_handle(&self) -> RawHandle {
+        self.handle as RawHandle
     }
 }

@@ -1,5 +1,5 @@
 //! This example is a simple implementation of minesweeper.
-//! Original source frome https://gitlab.redox-os.org/redox-os/games/-/tree/master/src/minesweeper
+//! Original source from https://gitlab.redox-os.org/redox-os/games/-/tree/master/src/minesweeper
 //! Adapted to sl-console and tweaked for playability (mouse, mines don't wrap).
 
 /*

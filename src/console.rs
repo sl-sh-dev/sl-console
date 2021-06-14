@@ -583,3 +583,81 @@ mod test {
         tty.bytes().next();
     }
 }
+
+#[cfg(unix)]
+mod unix_impl {
+    use super::*;
+    use std::os::unix::io::{AsRawFd, RawFd};
+
+    impl AsRawFd for Conin {
+        fn as_raw_fd(&self) -> RawFd {
+            self.lock().as_raw_fd()
+        }
+    }
+    impl AsRawFd for Conout {
+        fn as_raw_fd(&self) -> RawFd {
+            self.lock().as_raw_fd()
+        }
+    }
+
+    impl AsRawFd for ConsoleIn {
+        fn as_raw_fd(&self) -> RawFd {
+            self.syscon.as_raw_fd()
+        }
+    }
+    impl AsRawFd for ConsoleOut {
+        fn as_raw_fd(&self) -> RawFd {
+            self.syscon.as_raw_fd()
+        }
+    }
+
+    impl<'a> AsRawFd for ConsoleInLock<'a> {
+        fn as_raw_fd(&self) -> RawFd {
+            self.inner.borrow_mut().as_raw_fd()
+        }
+    }
+    impl<'a> AsRawFd for ConsoleOutLock<'a> {
+        fn as_raw_fd(&self) -> RawFd {
+            self.inner.borrow_mut().as_raw_fd()
+        }
+    }
+}
+
+#[cfg(windows)]
+mod windows_impl {
+    use super::*;
+    use std::os::windows::io::{AsRawHandle, RawHandle};
+
+    impl AsRawHandle for Conin {
+        fn as_raw_handle(&self) -> RawHandle {
+            self.lock().as_raw_handle()
+        }
+    }
+    impl AsRawHandle for Conout {
+        fn as_raw_handle(&self) -> RawHandle {
+            self.lock().as_raw_handle()
+        }
+    }
+
+    impl AsRawHandle for ConsoleIn {
+        fn as_raw_handle(&self) -> RawHandle {
+            self.syscon.as_raw_handle()
+        }
+    }
+    impl AsRawHandle for ConsoleOut {
+        fn as_raw_handle(&self) -> RawHandle {
+            self.syscon.as_raw_handle()
+        }
+    }
+
+    impl<'a> AsRawHandle for ConsoleInLock<'a> {
+        fn as_raw_handle(&self) -> RawHandle {
+            self.inner.borrow_mut().as_raw_handle()
+        }
+    }
+    impl<'a> AsRawHandle for ConsoleOutLock<'a> {
+        fn as_raw_handle(&self) -> RawHandle {
+            self.inner.borrow_mut().as_raw_handle()
+        }
+    }
+}

@@ -4,7 +4,7 @@ use libc::{self, suseconds_t, timeval};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::time::Duration;
 
 use super::Termios;
@@ -127,7 +127,7 @@ impl SysConsoleIn {
     /// Read from the byte stream.
     ///
     /// This version blocks, the read from the Read trait does not.
-    pub fn read_block(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    pub(crate) fn read_block(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.poll();
         self.read(buf)
     }
@@ -136,5 +136,17 @@ impl SysConsoleIn {
 impl Read for SysConsoleIn {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.tty.read(buf)
+    }
+}
+
+impl AsRawFd for SysConsoleOut {
+    fn as_raw_fd(&self) -> RawFd {
+        self.tty.as_raw_fd()
+    }
+}
+
+impl AsRawFd for SysConsoleIn {
+    fn as_raw_fd(&self) -> RawFd {
+        self.tty.as_raw_fd()
     }
 }
