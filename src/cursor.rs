@@ -188,10 +188,15 @@ impl<C: ConsoleRead> CursorPos for C {
                         }
                         Ok(_) => {}
                         Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
+                            // Don't error out on a would block- this just means no response since async.
                             if retry {
+                                // read finishes and no data was returned, since this
+                                // is the first time, call poll_timeout once more to allow another
+                                // call to read.
                                 conin.poll_timeout(timeout);
                                 retry = false;
                             } else {
+                                // if this is the second time read has finished, tell buf to terminate.
                                 buf[0] = delimiter;
                             }
                         }
