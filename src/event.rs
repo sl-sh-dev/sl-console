@@ -172,7 +172,7 @@ where
 
 /// Parses a CSI sequence, just after reading ^[
 ///
-/// Returns Result<Event, io::Error, Event may be unsupported.
+/// Returns Result<Event, io::Error>, Event may be unsupported.
 fn parse_csi<I>(iter: &mut I) -> Result<Event, io::Error>
 where
     I: Iterator<Item = Result<u8, Error>>,

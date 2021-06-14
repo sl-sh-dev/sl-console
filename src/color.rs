@@ -321,6 +321,8 @@ fn detect_color(conin: &mut dyn ConsoleRead, color: u16) -> io::Result<bool> {
     if conin.poll_timeout(timeout) {
         match conin.read(&mut buf) {
             Ok(b) => total_read += b,
+            // Don't error out on a would block- this just means no response since async.
+            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
             Err(err) => return Err(err),
         }
     }
