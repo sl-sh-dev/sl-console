@@ -1,3 +1,4 @@
+use simple_logger::SimpleLogger;
 use sl_console::color;
 use sl_console::*;
 use std::io::{Read, Write};
@@ -5,6 +6,7 @@ use std::io::{Read, Write};
 fn main() {
     // Initialize 'em all.
     con_init().unwrap();
+    SimpleLogger::new().init().unwrap();
     let mut conout = conout();
     let _raw = conout.raw_mode_guard().unwrap();
     let conin = conin();

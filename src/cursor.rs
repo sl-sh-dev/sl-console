@@ -5,7 +5,7 @@ use numtoa::NumToA;
 use std::fmt;
 use std::io::{self, Error, ErrorKind, Write};
 use std::ops;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 /// The timeout of an escape code control sequence, in milliseconds.
 const CONTROL_SEQUENCE_TIMEOUT: u64 = 100;
@@ -178,38 +178,56 @@ impl<C: ConsoleRead> CursorPos for C {
             let mut buf: [u8; 1] = [0];
             let mut read_chars = Vec::new();
 
-            let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT);
-            let now = SystemTime::now();
-
-            // Either consume all data up to R or wait for a timeout.
-            while buf[0] != delimiter && now.elapsed().unwrap() < timeout {
-                match conin.read(&mut buf) {
-                    Ok(b) if b > 0 => read_chars.push(buf[0]),
-                    Ok(_) => {}
-                    // WouldBlock just means no data yet so keep trying.
-                    Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-                    Err(err) => return Err(err),
+            let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT / 2);
+            let mut retry = true;
+            if conin.poll_timeout(timeout) {
+                while buf[0] != delimiter {
+                    match conin.read(&mut buf) {
+                        Ok(b) if b > 0 => {
+                            read_chars.push(buf[0]);
+                        }
+                        Ok(_) => {}
+                        Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
+                            // Don't error out on a would block- this just means no response since async.
+                            if retry {
+                                // read finishes and no data was returned, since this
+                                // is the first time, call poll_timeout once more to allow another
+                                // call to read.
+                                conin.poll_timeout(timeout);
+                                retry = false;
+                            } else {
+                                // if this is the second time read has finished, signal termination.
+                                buf[0] = delimiter;
+                            }
+                        }
+                        Err(err) => return Err(err),
+                    }
                 }
             }
 
-            if read_chars.is_empty() {
+            if !read_chars.is_empty() {
+                // The answer will look like `ESC [ Cy ; Cx R`.
+                read_chars.pop(); // remove trailing R.
+                if let Ok(read_str) = String::from_utf8(read_chars) {
+                    if let Some(beg) = read_str.rfind('[') {
+                        let coords: String = read_str.chars().skip(beg + 1).collect();
+                        let mut nums = coords.split(';');
+                        if let (Some(cy), Some(cx)) = (nums.next(), nums.next()) {
+                            if let (Ok(cy), Ok(cx)) = (cy.parse::<u16>(), cx.parse::<u16>()) {
+                                return Ok((cx, cy));
+                            }
+                        }
+                    }
+                }
                 return Err(Error::new(
                     ErrorKind::Other,
-                    "Cursor position detection timed out.",
+                    "Failed to parse coords from chars read from console.",
                 ));
             }
-
-            // The answer will look like `ESC [ Cy ; Cx R`.
-
-            read_chars.pop(); // remove trailing R.
-            let read_str = String::from_utf8(read_chars).unwrap();
-            let beg = read_str.rfind('[').unwrap();
-            let coords: String = read_str.chars().skip(beg + 1).collect();
-            let mut nums = coords.split(';');
-
-            let cy = nums.next().unwrap().parse::<u16>().unwrap();
-            let cx = nums.next().unwrap().parse::<u16>().unwrap();
-            Ok((cx, cy))
+            Err(Error::new(
+                ErrorKind::Other,
+                "Cursor position detection timed out.",
+            ))
         }
         let old_blocking = self.is_blocking();
         self.set_blocking(false);

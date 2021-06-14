@@ -1,3 +1,4 @@
+use simple_logger::SimpleLogger;
 use sl_console::event::Key;
 use sl_console::input::TermRead;
 use sl_console::*;
@@ -31,6 +32,7 @@ fn rainbow<W: Write>(out: &mut W, blue: u8) {
 
 fn main() {
     con_init().unwrap();
+    SimpleLogger::new().init().unwrap();
     let conin = conin();
     let mut conout = conout();
     let _raw = conout.raw_mode_guard().unwrap();

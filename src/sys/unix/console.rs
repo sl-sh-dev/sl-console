@@ -73,10 +73,10 @@ pub struct SysConsoleIn {
 }
 
 impl SysConsoleIn {
-    /// Return when more data is avialable.
+    /// Return when more data is available.
     ///
     /// Calls to a get_* function should return a value now.
-    /// Assume this can be interupted.
+    /// Assume this can be interrupted.
     pub fn poll(&mut self) {
         let tty_fd = self.tty.as_raw_fd();
         let mut rfdset = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
@@ -95,7 +95,7 @@ impl SysConsoleIn {
 
     /// Return more data is ready or the timeout is reached.
     ///
-    /// Assume this can be interupted.
+    /// Assume this can be interrupted.
     /// Returns true if the more data was ready, false if timed out.
     pub fn poll_timeout(&mut self, timeout: Duration) -> bool {
         let tty_fd = self.tty.as_raw_fd();
