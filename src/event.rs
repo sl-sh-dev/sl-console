@@ -106,7 +106,6 @@ where
     where
         I: Iterator<Item = Result<u8, Error>>,
     {
-        let error = Error::new(ErrorKind::Other, "Could not parse an event");
         match item {
             b'\x1B' => {
                 // This is an escape character, leading a control sequence.
@@ -115,7 +114,12 @@ where
                         match iter.next() {
                             // F1-F4
                             Some(Ok(val @ b'P'..=b'S')) => Event::Key(Key::F(1 + val - b'P')),
-                            _ => return Err(error),
+                            _ => {
+                                return Err(Error::new(
+                                    ErrorKind::Other,
+                                    "Could not parse an event",
+                                ))
+                            }
                         }
                     }
                     Some(Ok(b'[')) => {
@@ -126,7 +130,9 @@ where
                         let ch = parse_utf8_char(c, iter)?;
                         Event::Key(Key::Alt(ch))
                     }
-                    Some(Err(_)) | None => return Err(error),
+                    Some(Err(_)) | None => {
+                        return Err(Error::new(ErrorKind::Other, "Could not parse an event"))
+                    }
                 })
             }
             b'\n' | b'\r' => Ok(Event::Key(Key::Char('\n'))),
@@ -153,7 +159,14 @@ where
     match result {
         Ok(event) => Ok(event),
         Err(error) => {
-            warn!("Failed to parse event: {}", error);
+            let control_str = match String::from_utf8(control_seq.clone()) {
+                Ok(str) => str,
+                Err(_) => String::from(""),
+            };
+            warn!(
+                "Failed to parse event: {}. Buffer: {:?}, {:?}.",
+                error, control_seq, control_str
+            );
             Ok(Event::Unsupported(control_seq))
         }
     }
@@ -173,7 +186,7 @@ where
 /// Parses a CSI sequence, just after reading ^[
 ///
 /// Returns Result<Event, io::Error>, Event may be unsupported.
-fn parse_csi<I>(iter: &mut I) -> Result<Event, io::Error>
+fn parse_csi<I>(iter: &mut I) -> io::Result<Event>
 where
     I: Iterator<Item = Result<u8, Error>>,
 {
@@ -183,7 +196,7 @@ where
             _ => {
                 return Err(Error::new(
                     ErrorKind::Other,
-                    "Failed to parse csi code b'['",
+                    "Failed to parse csi code [",
                 ))
             }
         },
@@ -222,7 +235,7 @@ where
                     _ => {
                         return Err(Error::new(
                             ErrorKind::Other,
-                            "Failed to parse csi code b'M'",
+                            "Failed to parse csi code M",
                         ))
                     }
                 })
@@ -268,7 +281,7 @@ where
                                             b'm' => MouseEvent::Release(cx, cy),
                                             _ => return Err(Error::new(
                                                 ErrorKind::Other,
-                                                "Failed to parse csi code b'M' or b'm' after b'<'",
+                                                "Failed to parse csi code M or m after <",
                                             )),
                                         }
                                     }
@@ -326,7 +339,7 @@ where
                                         96 | 97 => MouseEvent::Press(MouseButton::WheelUp, cx, cy),
                                         _ => return Err(Error::new(
                                             ErrorKind::Other,
-                                            "Failed to parse csi code b'0'..=b'9' as mouse event",
+                                            "Failed to parse csi code 0-9 as mouse event",
                                         )),
                                     };
                                     return Ok(Event::Mouse(event));
@@ -353,7 +366,7 @@ where
                                 0 => {
                                     return Err(Error::new(
                                         ErrorKind::Other,
-                                        "Failed to parse csi b'~', buffer is empty",
+                                        "Failed to parse csi ~, buffer is empty",
                                     ))
                                 }
                                 1 => match nums[0] {
@@ -369,7 +382,7 @@ where
                                     _ => {
                                         return Err(Error::new(
                                             ErrorKind::Other,
-                                            "Failed to parse csi code b'~', unexpected value",
+                                            "Failed to parse csi code ~, unexpected value",
                                         ))
                                     }
                                 },
@@ -383,13 +396,13 @@ where
                         }
                         return Err(Error::new(
                             ErrorKind::Other,
-                            "Failed to parse csi code b'~' from buffer",
+                            "Failed to parse csi code ~ from buffer",
                         ));
                     }
                     _ => {
                         return Err(Error::new(
                             ErrorKind::Other,
-                            "Failed to parse csi code b'~'",
+                            "Failed to parse csi code ~",
                         ))
                     }
                 };
