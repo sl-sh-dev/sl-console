@@ -193,12 +193,7 @@ where
     Ok(match iter.next() {
         Some(Ok(b'[')) => match iter.next() {
             Some(Ok(val @ b'A'..=b'E')) => Event::Key(Key::F(1 + val - b'A')),
-            _ => {
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    "Failed to parse csi code [",
-                ))
-            }
+            _ => return Err(Error::new(ErrorKind::Other, "Failed to parse csi code [")),
         },
         Some(Ok(b'D')) => Event::Key(Key::Left),
         Some(Ok(b'C')) => Event::Key(Key::Right),
@@ -232,12 +227,7 @@ where
                     }
                     2 => MouseEvent::Press(MouseButton::Right, cx, cy),
                     3 => MouseEvent::Release(cx, cy),
-                    _ => {
-                        return Err(Error::new(
-                            ErrorKind::Other,
-                            "Failed to parse csi code M",
-                        ))
-                    }
+                    _ => return Err(Error::new(ErrorKind::Other, "Failed to parse csi code M")),
                 })
             } else {
                 return Err(Error::new(
@@ -279,10 +269,12 @@ where
                                         match c {
                                             b'M' => MouseEvent::Press(button, cx, cy),
                                             b'm' => MouseEvent::Release(cx, cy),
-                                            _ => return Err(Error::new(
-                                                ErrorKind::Other,
-                                                "Failed to parse csi code M or m after <",
-                                            )),
+                                            _ => {
+                                                return Err(Error::new(
+                                                    ErrorKind::Other,
+                                                    "Failed to parse csi code M or m after <",
+                                                ))
+                                            }
                                         }
                                     }
                                     32 => MouseEvent::Hold(cx, cy),
@@ -337,10 +329,12 @@ where
                                         35 => MouseEvent::Release(cx, cy),
                                         64 => MouseEvent::Hold(cx, cy),
                                         96 | 97 => MouseEvent::Press(MouseButton::WheelUp, cx, cy),
-                                        _ => return Err(Error::new(
-                                            ErrorKind::Other,
-                                            "Failed to parse csi code 0-9 as mouse event",
-                                        )),
+                                        _ => {
+                                            return Err(Error::new(
+                                                ErrorKind::Other,
+                                                "Failed to parse csi code 0-9 as mouse event",
+                                            ))
+                                        }
                                     };
                                     return Ok(Event::Mouse(event));
                                 }
@@ -399,12 +393,7 @@ where
                             "Failed to parse csi code ~ from buffer",
                         ));
                     }
-                    _ => {
-                        return Err(Error::new(
-                            ErrorKind::Other,
-                            "Failed to parse csi code ~",
-                        ))
-                    }
+                    _ => return Err(Error::new(ErrorKind::Other, "Failed to parse csi code ~")),
                 };
             };
             return Err(Error::new(

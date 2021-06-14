@@ -196,7 +196,7 @@ impl<C: ConsoleRead> CursorPos for C {
                                 conin.poll_timeout(timeout);
                                 retry = false;
                             } else {
-                                // if this is the second time read has finished, tell buf to terminate.
+                                // if this is the second time read has finished, signal termination.
                                 buf[0] = delimiter;
                             }
                         }
