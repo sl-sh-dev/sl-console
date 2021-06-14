@@ -1,3 +1,4 @@
+use simple_logger::SimpleLogger;
 use sl_console::event::Key;
 use sl_console::input::TermRead;
 use sl_console::screen::*;
@@ -14,6 +15,7 @@ fn write_alt_screen_msg<W: Write>(screen: &mut W) {
 
 fn main() {
     con_init().unwrap();
+    SimpleLogger::new().init().unwrap();
     let stdin = conin();
     let _raw = conout().raw_mode_guard().unwrap();
     let mut screen = AlternateScreen::from(conout());

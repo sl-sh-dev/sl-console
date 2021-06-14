@@ -1,5 +1,6 @@
 //! Mouse and key events.
 
+use log::warn;
 use std::io::{Error, ErrorKind};
 use std::{io, str};
 
@@ -101,39 +102,60 @@ pub fn parse_event<I>(item: u8, iter: &mut I) -> Result<Event, Error>
 where
     I: Iterator<Item = Result<u8, Error>>,
 {
-    let error = Error::new(ErrorKind::Other, "Could not parse an event");
-    match item {
-        b'\x1B' => {
-            // This is an escape character, leading a control sequence.
-            Ok(match iter.next() {
-                Some(Ok(b'O')) => {
-                    match iter.next() {
-                        // F1-F4
-                        Some(Ok(val @ b'P'..=b'S')) => Event::Key(Key::F(1 + val - b'P')),
-                        _ => return Err(error),
+    fn inner_parse_event<I>(item: u8, iter: &mut I) -> Result<Event, Error>
+    where
+        I: Iterator<Item = Result<u8, Error>>,
+    {
+        let error = Error::new(ErrorKind::Other, "Could not parse an event");
+        match item {
+            b'\x1B' => {
+                // This is an escape character, leading a control sequence.
+                Ok(match iter.next() {
+                    Some(Ok(b'O')) => {
+                        match iter.next() {
+                            // F1-F4
+                            Some(Ok(val @ b'P'..=b'S')) => Event::Key(Key::F(1 + val - b'P')),
+                            _ => return Err(error),
+                        }
                     }
-                }
-                Some(Ok(b'[')) => {
-                    // This is a CSI sequence.
-                    parse_csi(iter)?
-                }
-                Some(Ok(c)) => {
-                    let ch = parse_utf8_char(c, iter)?;
-                    Event::Key(Key::Alt(ch))
-                }
-                Some(Err(_)) | None => return Err(error),
-            })
+                    Some(Ok(b'[')) => {
+                        // This is a CSI sequence.
+                        parse_csi(iter)?
+                    }
+                    Some(Ok(c)) => {
+                        let ch = parse_utf8_char(c, iter)?;
+                        Event::Key(Key::Alt(ch))
+                    }
+                    Some(Err(_)) | None => return Err(error),
+                })
+            }
+            b'\n' | b'\r' => Ok(Event::Key(Key::Char('\n'))),
+            b'\t' => Ok(Event::Key(Key::Char('\t'))),
+            b'\x7F' => Ok(Event::Key(Key::Backspace)),
+            c @ b'\x01'..=b'\x1A' => Ok(Event::Key(Key::Ctrl((c as u8 - 0x1 + b'a') as char))),
+            c @ b'\x1C'..=b'\x1F' => Ok(Event::Key(Key::Ctrl((c as u8 - 0x1C + b'4') as char))),
+            b'\0' => Ok(Event::Key(Key::Null)),
+            c => Ok({
+                let ch = parse_utf8_char(c, iter)?;
+                Event::Key(Key::Char(ch))
+            }),
         }
-        b'\n' | b'\r' => Ok(Event::Key(Key::Char('\n'))),
-        b'\t' => Ok(Event::Key(Key::Char('\t'))),
-        b'\x7F' => Ok(Event::Key(Key::Backspace)),
-        c @ b'\x01'..=b'\x1A' => Ok(Event::Key(Key::Ctrl((c as u8 - 0x1 + b'a') as char))),
-        c @ b'\x1C'..=b'\x1F' => Ok(Event::Key(Key::Ctrl((c as u8 - 0x1C + b'4') as char))),
-        b'\0' => Ok(Event::Key(Key::Null)),
-        c => Ok({
-            let ch = parse_utf8_char(c, iter)?;
-            Event::Key(Key::Char(ch))
-        }),
+    }
+    let mut control_seq = vec![item];
+    let result = {
+        let mut iter = iter.inspect(|k| {
+            if let Ok(k) = k {
+                control_seq.push(*k);
+            }
+        });
+        inner_parse_event(item, &mut iter)
+    };
+    match result {
+        Ok(event) => Ok(event),
+        Err(error) => {
+            warn!("Failed to parse event: {}", error);
+            Ok(Event::Unsupported(control_seq))
+        }
     }
 }
 
@@ -421,13 +443,37 @@ where
 }
 
 #[cfg(test)]
-#[test]
-fn test_parse_utf8() {
-    let st = "abcéŷ¤£€ù%323";
-    let ref mut bytes = st.bytes().map(|x| Ok(x));
-    let chars = st.chars();
-    for c in chars {
-        let b = bytes.next().unwrap().unwrap();
-        assert!(c == parse_utf8_char(b, bytes).unwrap());
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_parse_utf8() {
+        let st = "abcéŷ¤£€ù%323";
+        let ref mut bytes = st.bytes().map(|x| Ok(x));
+        let chars = st.chars();
+        for c in chars {
+            let b = bytes.next().unwrap().unwrap();
+            assert!(c == parse_utf8_char(b, bytes).unwrap());
+        }
+    }
+
+    #[test]
+    fn test_parse_valid() {
+        let item = b'\x1B';
+        let mut iter = "[<3;65;8;M".bytes().map(|x| Ok(x));
+        assert_eq!(
+            parse_event(item, &mut iter).unwrap(),
+            Event::Mouse(MouseEvent::Release(65, 8)),
+        )
+    }
+
+    #[test]
+    fn test_parse_invalid() {
+        let item = b'\x1B';
+        let mut iter = "[x".bytes().map(|x| Ok(x));
+        assert_eq!(
+            parse_event(item, &mut iter).unwrap(),
+            Event::Unsupported(vec![b'\x1B', b'[', b'x']),
+        )
     }
 }

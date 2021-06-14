@@ -1,3 +1,4 @@
+use simple_logger::SimpleLogger;
 use sl_console::event::*;
 use sl_console::*;
 use std::io::{self, Write};
@@ -6,6 +7,7 @@ use std::time::Duration;
 
 fn main() {
     con_init().unwrap();
+    SimpleLogger::new().init().unwrap();
     let mut conin = conin();
     conin.set_blocking(false); // Console to async read.
     let mut conout = conout();

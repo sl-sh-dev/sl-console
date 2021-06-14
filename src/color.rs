@@ -316,17 +316,12 @@ fn detect_color(conin: &mut dyn ConsoleRead, color: u16) -> io::Result<bool> {
     let mut total_read = 0;
 
     let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT);
-    let bell = 7u8;
 
-    // Either consume all data up to bell or wait for a timeout.
+    // Consume any data
     if conin.poll_timeout(timeout) {
-        while buf[0] != bell {
-            match conin.read(&mut buf) {
-                Ok(b) => total_read += b,
-                // Don't error out on a would block- this just means no response since async.
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-                Err(err) => return Err(err),
-            }
+        match conin.read(&mut buf) {
+            Ok(b) => total_read += b,
+            Err(err) => return Err(err),
         }
     }
     // If there was a response, the color is supported.

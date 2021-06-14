@@ -1,3 +1,4 @@
+use simple_logger::SimpleLogger;
 use sl_console::event::{Event, Key, MouseEvent};
 use sl_console::input::*;
 use sl_console::*;
@@ -5,6 +6,7 @@ use std::io::Write; //MouseTerminal;
 
 fn main() {
     con_init().unwrap();
+    SimpleLogger::new().init().unwrap();
     let mut console = conout();
     let _raw = console.raw_mode_guard().unwrap();
     let mut console = MouseTerminal::from(console);

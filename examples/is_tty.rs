@@ -1,6 +1,8 @@
+use simple_logger::SimpleLogger;
 use std::io;
 
 fn main() {
+    SimpleLogger::new().init().unwrap();
     let streamin = io::stdin();
     let streamout = io::stdout();
 

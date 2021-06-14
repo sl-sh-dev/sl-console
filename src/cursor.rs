@@ -178,36 +178,46 @@ impl<C: ConsoleRead> CursorPos for C {
             let mut buf: [u8; 1] = [0];
             let mut read_chars = Vec::new();
 
-            let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT);
+            let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT / 2);
+            let mut retry = true;
             if conin.poll_timeout(timeout) {
                 while buf[0] != delimiter {
                     match conin.read(&mut buf) {
-                        Ok(b) if b > 0 => read_chars.push(buf[0]),
+                        Ok(b) if b > 0 => {
+                            read_chars.push(buf[0]);
+                        }
                         Ok(_) => {}
-                        // WouldBlock just means no data yet so keep trying.
-                        Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+                        Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
+                            if retry {
+                                conin.poll_timeout(timeout);
+                                retry = false;
+                            } else {
+                                buf[0] = delimiter;
+                            }
+                        }
                         Err(err) => return Err(err),
                     }
                 }
-                if !read_chars.is_empty() {
-                    // The answer will look like `ESC [ Cy ; Cx R`.
-                    read_chars.pop(); // remove trailing R.
-                    if let Ok(read_str) = String::from_utf8(read_chars) {
-                        if let Some(beg) = read_str.rfind('[') {
-                            let coords: String = read_str.chars().skip(beg + 1).collect();
-                            let mut nums = coords.split(';');
-                            if let (Some(cy), Some(cx)) = (nums.next(), nums.next()) {
-                                if let (Ok(cy), Ok(cx)) = (cy.parse::<u16>(), cx.parse::<u16>()) {
-                                    return Ok((cx, cy));
-                                }
+            }
+
+            if !read_chars.is_empty() {
+                // The answer will look like `ESC [ Cy ; Cx R`.
+                read_chars.pop(); // remove trailing R.
+                if let Ok(read_str) = String::from_utf8(read_chars) {
+                    if let Some(beg) = read_str.rfind('[') {
+                        let coords: String = read_str.chars().skip(beg + 1).collect();
+                        let mut nums = coords.split(';');
+                        if let (Some(cy), Some(cx)) = (nums.next(), nums.next()) {
+                            if let (Ok(cy), Ok(cx)) = (cy.parse::<u16>(), cx.parse::<u16>()) {
+                                return Ok((cx, cy));
                             }
                         }
                     }
-                    return Err(Error::new(
-                        ErrorKind::Other,
-                        "Failed to parse coords from chars read from console.",
-                    ));
                 }
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Failed to parse coords from chars read from console.",
+                ));
             }
             Err(Error::new(
                 ErrorKind::Other,
