@@ -1,6 +1,6 @@
 //! Support access to the tty/console.
 
-use libc::{self, suseconds_t, timeval};
+use libc::{self, fd_set, suseconds_t, timeval};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
@@ -79,8 +79,8 @@ impl SysConsoleIn {
     /// Assume this can be interrupted.
     pub fn poll(&mut self) {
         let tty_fd = self.tty.as_raw_fd();
-        let mut rfdset = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
         unsafe {
+            let mut rfdset: fd_set = std::mem::MaybeUninit::zeroed().assume_init();
             libc::FD_ZERO(&mut rfdset);
             libc::FD_SET(tty_fd, &mut rfdset);
             libc::select(
@@ -99,7 +99,7 @@ impl SysConsoleIn {
     /// Returns true if the more data was ready, false if timed out.
     pub fn poll_timeout(&mut self, timeout: Duration) -> bool {
         let tty_fd = self.tty.as_raw_fd();
-        let mut rfdset = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
+        let mut rfdset: fd_set = unsafe { std::mem::MaybeUninit::zeroed().assume_init() };
         unsafe {
             libc::FD_ZERO(&mut rfdset);
             libc::FD_SET(tty_fd, &mut rfdset);
