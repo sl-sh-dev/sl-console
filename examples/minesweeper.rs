@@ -76,6 +76,8 @@ struct Cell {
     flagged: bool,
 }
 
+const FG_FLAG: Fg<Rgb> = Fg(Rgb(0, 255, 0));
+const FG_FLAG_ERR: Fg<Rgb> = Fg(Rgb(255, 0, 0));
 const BG_REVEALED: Bg<Rgb> = Bg(Rgb(128, 128, 128));
 const FG_REVEALED: Fg<Rgb> = Fg(Rgb(0, 0, 0));
 const BG_CONCEALED: Bg<Rgb> = Bg(Rgb(0, 0, 0));
@@ -314,7 +316,7 @@ impl<R: ConsoleRead, W: Write> Game<R, W> {
                 style::Reset
             )
             .unwrap();
-            return self.game_over();
+            return self.game_over(false);
         }
 
         if !self.get(x, y).revealed {
@@ -388,20 +390,16 @@ impl<R: ConsoleRead, W: Write> Game<R, W> {
             }
             // Make sure the cursor is placed on the current position.
             cursor::goto(self.x + 2, self.y + 2).unwrap();
+            if self.chicken_dinner() {
+                return self.game_over(true);
+            }
         }
     }
 
     /// Set a flag on cell.
     fn set_flag(&mut self, x: u16, y: u16) {
         if !self.get(x, y).revealed {
-            write!(
-                self.conout,
-                "{}{}{}",
-                Fg(Rgb(0, 255, 0)),
-                FLAGGED,
-                Fg(Reset)
-            )
-            .unwrap();
+            write!(self.conout, "{}{}{}", FG_FLAG, FLAGGED, Fg(Reset)).unwrap();
             self.conout.flush().unwrap();
             self.get_mut(x, y).flagged = true;
         }
@@ -477,6 +475,16 @@ impl<R: ConsoleRead, W: Write> Game<R, W> {
         self.first_click = true;
     }
 
+    /// Winner, winner chicken dinner!
+    fn chicken_dinner(&self) -> bool {
+        for cell in self.grid.iter() {
+            if !cell.observed || (cell.mine && !cell.flagged) || (!cell.revealed && !cell.flagged) {
+                return false;
+            }
+        }
+        true
+    }
+
     /// Get the value of a cell.
     ///
     /// The value represent the sum of adjacent cells containing mines. A cell of value, 0, is
@@ -549,13 +557,25 @@ impl<R: ConsoleRead, W: Write> Game<R, W> {
         for y in 0..self.height {
             for x in 0..self.width {
                 write!(self.conout, "{}", cursor::Goto(x + 2, y + 2)).unwrap();
-                if self.get(x, y).mine {
+                let cell = self.get(x, y);
+                if cell.mine {
                     write!(
                         self.conout,
                         "{}{}{}{}{}",
-                        FG_REVEALED,
+                        if cell.flagged { FG_FLAG } else { FG_REVEALED },
                         BG_REVEALED,
                         MINE,
+                        Bg(Reset),
+                        Fg(Reset)
+                    )
+                    .unwrap();
+                } else if cell.flagged {
+                    write!(
+                        self.conout,
+                        "{}{}{}{}{}",
+                        FG_FLAG_ERR,
+                        BG_REVEALED,
+                        FLAGGED,
                         Bg(Reset),
                         Fg(Reset)
                     )
@@ -566,12 +586,21 @@ impl<R: ConsoleRead, W: Write> Game<R, W> {
     }
 
     /// Game over!
-    fn game_over(&mut self) -> bool {
+    fn game_over(&mut self, won: bool) -> bool {
         let termsize = sl_console::terminal_size().ok();
         let termheight = termsize.map(|(_, h)| h).or_else(|| Some(6)).unwrap();
         //Goto bottom left corner
+        if won {
+            write!(self.conout, "{}YOU WON!", cursor::Goto(1, termheight - 6)).unwrap();
+        } else {
+            write!(
+                self.conout,
+                "{}YOU LOST :(",
+                cursor::Goto(1, termheight - 6)
+            )
+            .unwrap();
+        }
         write!(self.conout, "{}", cursor::Goto(1, termheight - 5)).unwrap();
-
         self.conout.write(GAME_OVER.as_bytes()).unwrap();
         self.conout.flush().unwrap();
 
@@ -581,6 +610,7 @@ impl<R: ConsoleRead, W: Write> Game<R, W> {
             match key {
                 Ok(Key::Char('r')) => {
                     // Replay!
+                    write!(self.conout, "{}", clear::All).unwrap();
                     self.reset();
                     return true;
                 }
