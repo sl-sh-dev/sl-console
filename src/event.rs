@@ -1,6 +1,5 @@
 //! Mouse and key events.
 
-use log::warn;
 use std::io::{Error, ErrorKind};
 use std::{io, str};
 
@@ -9,6 +8,8 @@ use std::{io, str};
 pub enum Event {
     /// A key press.
     Key(Key),
+    /// Combination of key presses.
+    KeyCombo(KeyCombo),
     /// A mouse button press, release or wheel use at specific coordinates.
     Mouse(MouseEvent),
     /// An event that cannot currently be evaluated.
@@ -97,6 +98,17 @@ pub enum Key {
     Esc,
 }
 
+/// Key combinations for keys besides Alt(char) and Ctrl(char) in
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum KeyCombo {
+    /// Shift + Any one non-alphabetic key.
+    Shift(Key),
+    /// Ctrl + Any one non-alphabetic key.
+    Ctrl(Key),
+    /// Alt + Any one non-alphabetic key.
+    Alt(Key),
+}
+
 /// Parse an Event from `item` and possibly subsequent bytes through `iter`.
 pub fn parse_event<I>(item: u8, iter: &mut I) -> io::Result<Event>
 where
@@ -156,6 +168,7 @@ where
         });
         inner_parse_event(item, &mut iter)
     };
+
     match result {
         Ok(event) => Ok(event),
         Err(error) => {
@@ -163,9 +176,11 @@ where
                 Ok(str) => str,
                 Err(_) => String::from(""),
             };
-            warn!(
+            log::warn!(
                 "Failed to parse event: {}. Buffer: {:?}, {:?}.",
-                error, control_seq, control_str
+                error,
+                control_seq,
+                control_str
             );
             Ok(Event::Unsupported(control_seq))
         }
@@ -380,11 +395,21 @@ where
                                         ))
                                     }
                                 },
-                                _ => {
-                                    // TODO: handle multiple values for key modifiers (ex: values
-                                    // [3, 2] means Shift+Delete)
-                                    Event::Unsupported(nums)
-                                }
+                                2 => match (nums[0], nums[1]) {
+                                    // TODO: handle all multiple values for key modifiers (ex:
+                                    // values
+                                    (3, 2) => Event::KeyCombo(KeyCombo::Shift(Key::Delete)),
+                                    (15, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(5))),
+                                    (17, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(6))),
+                                    (18, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(7))),
+                                    (19, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(8))),
+                                    (20, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(9))),
+                                    (21, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(10))),
+                                    (23, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(11))),
+                                    (24, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(12))),
+                                    (_, _) => Event::Unsupported(nums),
+                                },
+                                _ => Event::Unsupported(nums),
                             };
                             return Ok(event);
                         }
@@ -451,6 +476,9 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::array::IntoIter;
+    use std::collections::HashMap;
+    use std::iter::FromIterator;
 
     #[test]
     fn test_parse_utf8() {
@@ -463,14 +491,79 @@ mod test {
         }
     }
 
+    fn test_parse_event(item: u8, map: &mut HashMap<&str, Event>) {
+        for (key, val) in map.iter() {
+            let mut iter = key.bytes().map(|x| Ok(x));
+            assert_eq!(parse_event(item, &mut iter).unwrap(), *val)
+        }
+    }
+
     #[test]
-    fn test_parse_valid() {
+    fn test_parse_valid_csi_special_codes() {
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([
+            ("[1~", Event::Key(Key::Home)),
+            ("[7~", Event::Key(Key::Home)),
+            ("[2~", Event::Key(Key::Insert)),
+            ("[4~", Event::Key(Key::End)),
+            ("[8~", Event::Key(Key::End)),
+            ("[5~", Event::Key(Key::PageUp)),
+            ("[6~", Event::Key(Key::PageDown)),
+            ("[11~", Event::Key(Key::F(1))),
+            ("[12~", Event::Key(Key::F(2))),
+            ("[13~", Event::Key(Key::F(3))),
+            ("[14~", Event::Key(Key::F(4))),
+            ("[15~", Event::Key(Key::F(5))),
+            ("[17~", Event::Key(Key::F(6))),
+            ("[18~", Event::Key(Key::F(7))),
+            ("[19~", Event::Key(Key::F(8))),
+            ("[20~", Event::Key(Key::F(9))),
+            ("[21~", Event::Key(Key::F(10))),
+            ("[23~", Event::Key(Key::F(11))),
+            ("[24~", Event::Key(Key::F(12))),
+            ("[3;2~", Event::KeyCombo(KeyCombo::Shift(Key::Delete))),
+            ("[15;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(5)))),
+            ("[17;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(6)))),
+            ("[18;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(7)))),
+            ("[19;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(8)))),
+            ("[20;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(9)))),
+            ("[21;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(10)))),
+            ("[23;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(11)))),
+            ("[24;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(12)))),
+        ]));
+
         let item = b'\x1B';
-        let mut iter = "[<3;65;8;M".bytes().map(|x| Ok(x));
-        assert_eq!(
-            parse_event(item, &mut iter).unwrap(),
-            Event::Mouse(MouseEvent::Release(65, 8)),
-        )
+        test_parse_event(item, &mut map);
+    }
+
+    #[test]
+    fn test_parse_valid_csi_xterm_mouse() {
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([
+            (
+                "[<0;65;8;M",
+                Event::Mouse(MouseEvent::Press(MouseButton::Left, 65, 8)),
+            ),
+            (
+                "[<1;5;2;M",
+                Event::Mouse(MouseEvent::Press(MouseButton::Middle, 5, 2)),
+            ),
+            (
+                "[<2;65;8;M",
+                Event::Mouse(MouseEvent::Press(MouseButton::Right, 65, 8)),
+            ),
+            (
+                "[<64;65;8;M",
+                Event::Mouse(MouseEvent::Press(MouseButton::WheelUp, 65, 8)),
+            ),
+            (
+                "[<65;82;1;M",
+                Event::Mouse(MouseEvent::Press(MouseButton::WheelDown, 82, 1)),
+            ),
+            ("[<3;65;8;m", Event::Mouse(MouseEvent::Release(65, 8))),
+            ("[<32;113;234;m", Event::Mouse(MouseEvent::Hold(113, 234))),
+        ]));
+
+        let item = b'\x1B';
+        test_parse_event(item, &mut map);
     }
 
     #[test]
