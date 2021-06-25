@@ -8,7 +8,7 @@ use std::{io, str};
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Event {
     /// A key press.
-    Key(Key, KeyMods),
+    Key(Key),
     /// A mouse button press, release or wheel use at specific coordinates.
     Mouse(MouseEvent),
     /// An event that cannot currently be evaluated.
@@ -51,6 +51,11 @@ pub enum MouseButton {
     WheelDown,
 }
 
+pub struct Key {
+    key: KeyCode,
+    mods: KeyMods,
+}
+
 pub enum KeyMods {
     None,
     Alt,
@@ -65,7 +70,7 @@ pub enum KeyMods {
 /// A key.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
-pub enum Key {
+pub enum KeyCode {
     /// Backspace.
     Backspace,
     /// Left arrow.
