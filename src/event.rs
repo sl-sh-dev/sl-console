@@ -8,7 +8,7 @@ use std::{io, str};
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Event {
     /// A key press.
-    Key(Key),
+    Key(Key, KeyMods),
     /// A mouse button press, release or wheel use at specific coordinates.
     Mouse(MouseEvent),
     /// An event that cannot currently be evaluated.
@@ -49,6 +49,17 @@ pub enum MouseButton {
     ///
     /// This event is typically only used with Mouse::Press.
     WheelDown,
+}
+
+pub enum KeyMods {
+    None,
+    Alt,
+    Ctrl,
+    Shift,
+    AltCtrl,
+    AltShift,
+    CtrlShift,
+    CtrlAltShift,
 }
 
 /// A key.
