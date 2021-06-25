@@ -1,5 +1,5 @@
 use simple_logger::SimpleLogger;
-use sl_console::event::Key;
+use sl_console::event::KeyCode;
 use sl_console::input::TermRead;
 use sl_console::*;
 use std::io::Write;
@@ -49,16 +49,17 @@ fn main() {
     let mut blue = 172u8;
 
     for c in conin.keys() {
-        match c.unwrap() {
-            Key::Up => {
+        let key = c.unwrap();
+        match key.code {
+            KeyCode::Up => {
                 blue = blue.saturating_add(4);
                 rainbow(&mut conout, blue);
             }
-            Key::Down => {
+            KeyCode::Down => {
                 blue = blue.saturating_sub(4);
                 rainbow(&mut conout, blue);
             }
-            Key::Char('q') => break,
+            KeyCode::Char('q') => break,
             _ => {}
         }
         conout.flush().unwrap();

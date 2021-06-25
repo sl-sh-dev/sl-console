@@ -26,7 +26,12 @@ fn main() {
         let c = conin.get_event();
         let evt = c.unwrap();
         match evt {
-            Event::Key(Key::Char('q')) => break,
+            Event::Key(key) => {
+                match key.code {
+                    KeyCode::Char('q') => break,
+                    _ => {},
+                }
+            },
             Event::Mouse(me) => match me {
                 MouseEvent::Press(_, a, b) | MouseEvent::Release(a, b) | MouseEvent::Hold(a, b) => {
                     write!(console, "{}", cursor::Goto(a, b)).unwrap();

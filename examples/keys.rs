@@ -1,5 +1,5 @@
 use simple_logger::SimpleLogger;
-use sl_console::event::Key;
+use sl_console::event::KeyCode;
 use sl_console::input::TermRead;
 use sl_console::*;
 use std::io::Write;
@@ -30,17 +30,18 @@ fn main() {
         )
         .unwrap();
 
-        match c.unwrap() {
-            Key::Char('q') => break,
-            Key::Char(c) => println!("{}", c),
-            Key::Alt(c) => println!("^{}", c),
-            Key::Ctrl(c) => println!("*{}", c),
-            Key::Esc => println!("ESC"),
-            Key::Left => println!("←"),
-            Key::Right => println!("→"),
-            Key::Up => println!("↑"),
-            Key::Down => println!("↓"),
-            Key::Backspace => println!("×"),
+        let key = c.unwrap();
+        match key.code {
+            KeyCode::Char('q') => break,
+            KeyCode::Char(c) => println!("{}", c),
+            KeyCode::Alt(c) => println!("^{}", c),
+            KeyCode::Ctrl(c) => println!("*{}", c),
+            KeyCode::Esc => println!("ESC"),
+            KeyCode::Left => println!("←"),
+            KeyCode::Right => println!("→"),
+            KeyCode::Up => println!("↑"),
+            KeyCode::Down => println!("↓"),
+            KeyCode::Backspace => println!("×"),
             _ => {}
         }
         conout.flush().unwrap();

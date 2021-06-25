@@ -8,8 +8,6 @@ use std::{io, str};
 pub enum Event {
     /// A key press.
     Key(Key),
-    /// Combination of key presses.
-    KeyCombo(KeyCombo),
     /// A mouse button press, release or wheel use at specific coordinates.
     Mouse(MouseEvent),
     /// An event that cannot currently be evaluated.
@@ -52,10 +50,42 @@ pub enum MouseButton {
     WheelDown,
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+/// Struct representing a Key composed of a KeyCode and KeyMod
+pub struct Key {
+    /// any key that could be pressed
+    pub code: KeyCode,
+    /// any key modifier ctrl + alt + shift (excluding capital letters w/ shift) that could be
+    /// pressed.
+    pub mods: KeyMod,
+}
+
+impl Key {
+    /// Creates a new Key with no KeyMod
+    ///
+    /// Returns Key
+    pub fn new(key: KeyCode) -> Self {
+        Self {
+            code: key,
+            mods: KeyMod::NA,
+        }
+    }
+
+    /// Creates a new Key with provided KeyMod
+    ///
+    /// Returns Key
+    pub fn new_mod(key: KeyCode, mods: KeyMod) -> Self {
+        Self {
+            code: key,
+            mods,
+        }
+    }
+}
+
 /// A key.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
-pub enum Key {
+pub enum KeyCode {
     /// Backspace.
     Backspace,
     /// Left arrow.
@@ -100,13 +130,23 @@ pub enum Key {
 
 /// Key combinations for keys besides Alt(char) and Ctrl(char) in
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum KeyCombo {
-    /// Shift + Any one non-alphabetic key.
-    Shift(Key),
-    /// Ctrl + Any one non-alphabetic key.
-    Ctrl(Key),
-    /// Alt + Any one non-alphabetic key.
-    Alt(Key),
+pub enum KeyMod {
+    /// TODO change me can't Key just return Some(KeyMod)?
+    NA,
+    /// Alt
+    Alt,
+    /// Ctrl
+    Ctrl,
+    /// Shif
+    Shift,
+    /// Alt + Ctrl
+    AltCtrl,
+    /// Alt + Shift
+    AltShift,
+    /// Ctrl + Shift
+    CtrlShift,
+    /// Alt + Ctrl
+    AltCtrlShift,
 }
 
 /// Parse an Event from `item` and possibly subsequent bytes through `iter`.
@@ -125,7 +165,7 @@ where
                     Some(Ok(b'O')) => {
                         match iter.next() {
                             // F1-F4
-                            Some(Ok(val @ b'P'..=b'S')) => Event::Key(Key::F(1 + val - b'P')),
+                            Some(Ok(val @ b'P'..=b'S')) => Event::Key(Key::new(KeyCode::F(1 + val - b'P'))),
                             _ => {
                                 return Err(Error::new(
                                     ErrorKind::Other,
@@ -140,22 +180,22 @@ where
                     }
                     Some(Ok(c)) => {
                         let ch = parse_utf8_char(c, iter)?;
-                        Event::Key(Key::Alt(ch))
+                        Event::Key(Key::new(KeyCode::Alt(ch)))
                     }
                     Some(Err(_)) | None => {
                         return Err(Error::new(ErrorKind::Other, "Could not parse an event"))
                     }
                 })
             }
-            b'\n' | b'\r' => Ok(Event::Key(Key::Char('\n'))),
-            b'\t' => Ok(Event::Key(Key::Char('\t'))),
-            b'\x7F' => Ok(Event::Key(Key::Backspace)),
-            c @ b'\x01'..=b'\x1A' => Ok(Event::Key(Key::Ctrl((c as u8 - 0x1 + b'a') as char))),
-            c @ b'\x1C'..=b'\x1F' => Ok(Event::Key(Key::Ctrl((c as u8 - 0x1C + b'4') as char))),
-            b'\0' => Ok(Event::Key(Key::Null)),
+            b'\n' | b'\r' => Ok(Event::Key(Key::new(KeyCode::Char('\n')))),
+            b'\t' => Ok(Event::Key(Key::new(KeyCode::Char('\t')))),
+            b'\x7F' => Ok(Event::Key(Key::new(KeyCode::Backspace))),
+            c @ b'\x01'..=b'\x1A' => Ok(Event::Key(Key::new(KeyCode::Ctrl((c as u8 - 0x1 + b'a') as char)))),
+            c @ b'\x1C'..=b'\x1F' => Ok(Event::Key(Key::new(KeyCode::Ctrl((c as u8 - 0x1C + b'4') as char)))),
+            b'\0' => Ok(Event::Key(Key::new(KeyCode::Null))),
             c => Ok({
                 let ch = parse_utf8_char(c, iter)?;
-                Event::Key(Key::Char(ch))
+                Event::Key(Key::new(KeyCode::Char(ch)))
             }),
         }
     }
@@ -170,7 +210,23 @@ where
     };
 
     match result {
-        Ok(event) => Ok(event),
+        Ok(event) => {
+            if let Ok(control_str) = String::from_utf8(control_seq.clone()) {
+                log::trace!(
+                    "key: {:?}, dec: {:?}, ascii: {:?}.",
+                    event,
+                    control_seq,
+                    control_str
+                );
+            } else {
+                log::trace!(
+                    "key: {:?}, dec: {:?}, ascii: [failed to parse]",
+                    event,
+                    control_seq
+                )
+            }
+            Ok(event)
+        }
         Err(error) => {
             let control_str = match String::from_utf8(control_seq.clone()) {
                 Ok(str) => str,
@@ -207,16 +263,16 @@ where
 {
     Ok(match iter.next() {
         Some(Ok(b'[')) => match iter.next() {
-            Some(Ok(val @ b'A'..=b'E')) => Event::Key(Key::F(1 + val - b'A')),
+            Some(Ok(val @ b'A'..=b'E')) => Event::Key(Key::new(KeyCode::F(1 + val - b'A'))),
             _ => return Err(Error::new(ErrorKind::Other, "Failed to parse csi code [")),
         },
-        Some(Ok(b'D')) => Event::Key(Key::Left),
-        Some(Ok(b'C')) => Event::Key(Key::Right),
-        Some(Ok(b'A')) => Event::Key(Key::Up),
-        Some(Ok(b'B')) => Event::Key(Key::Down),
-        Some(Ok(b'H')) => Event::Key(Key::Home),
-        Some(Ok(b'F')) => Event::Key(Key::End),
-        Some(Ok(b'Z')) => Event::Key(Key::BackTab),
+        Some(Ok(b'D')) => Event::Key(Key::new(KeyCode::Left)),
+        Some(Ok(b'C')) => Event::Key(Key::new(KeyCode::Right)),
+        Some(Ok(b'A')) => Event::Key(Key::new(KeyCode::Up)),
+        Some(Ok(b'B')) => Event::Key(Key::new(KeyCode::Down)),
+        Some(Ok(b'H')) => Event::Key(Key::new(KeyCode::Home)),
+        Some(Ok(b'F')) => Event::Key(Key::new(KeyCode::End)),
+        Some(Ok(b'Z')) => Event::Key(Key::new(KeyCode::BackTab)),
         Some(Ok(b'M')) => {
             // X10 emulation mouse encoding: ESC [ CB Cx Cy (6 characters only).
             if let (Some(cb), Some(cx), Some(cy)) =
@@ -371,6 +427,7 @@ where
                                     nums.push(c);
                                 }
                             }
+                            log::warn!("nums is: {:?}.", nums);
                             let event = match nums.len() {
                                 0 => {
                                     return Err(Error::new(
@@ -379,15 +436,15 @@ where
                                     ))
                                 }
                                 1 => match nums[0] {
-                                    1 | 7 => Event::Key(Key::Home),
-                                    2 => Event::Key(Key::Insert),
-                                    3 => Event::Key(Key::Delete),
-                                    4 | 8 => Event::Key(Key::End),
-                                    5 => Event::Key(Key::PageUp),
-                                    6 => Event::Key(Key::PageDown),
-                                    v @ 11..=15 => Event::Key(Key::F(v - 10)),
-                                    v @ 17..=21 => Event::Key(Key::F(v - 11)),
-                                    v @ 23..=24 => Event::Key(Key::F(v - 12)),
+                                    1 | 7 => Event::Key(Key::new(KeyCode::Home)),
+                                    2 => Event::Key(Key::new(KeyCode::Insert)),
+                                    3 => Event::Key(Key::new(KeyCode::Delete)),
+                                    4 | 8 => Event::Key(Key::new(KeyCode::End)),
+                                    5 => Event::Key(Key::new(KeyCode::PageUp)),
+                                    6 => Event::Key(Key::new(KeyCode::PageDown)),
+                                    v @ 11..=15 => Event::Key(Key::new(KeyCode::F(v - 10))),
+                                    v @ 17..=21 => Event::Key(Key::new(KeyCode::F(v - 11))),
+                                    v @ 23..=24 => Event::Key(Key::new(KeyCode::F(v - 12))),
                                     _ => {
                                         return Err(Error::new(
                                             ErrorKind::Other,
@@ -395,20 +452,36 @@ where
                                         ))
                                     }
                                 },
-                                2 => match (nums[0], nums[1]) {
-                                    // TODO: handle all multiple values for key modifiers (ex:
-                                    // values
-                                    (3, 2) => Event::KeyCombo(KeyCombo::Shift(Key::Delete)),
-                                    (15, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(5))),
-                                    (17, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(6))),
-                                    (18, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(7))),
-                                    (19, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(8))),
-                                    (20, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(9))),
-                                    (21, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(10))),
-                                    (23, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(11))),
-                                    (24, 2) => Event::KeyCombo(KeyCombo::Shift(Key::F(12))),
-                                    (_, _) => Event::Unsupported(nums),
-                                },
+//                                2 => {
+//                                    log::warn!("nums 0: {:?}. 1: {:?}.", nums[0], nums[1]);
+//                                    let key = match nums[0] {
+//                                        3 => KeyCode::Delete,
+//                                        5 => KeyCode::PageUp,
+//                                        6 => KeyCode::PageDown,
+//                                        15 => KeyCode::F(5),
+//                                        17 => KeyCode::F(6),
+//                                        18 => KeyCode::F(7),
+//                                        19 => KeyCode::F(8),
+//                                        20 => KeyCode::F(9),
+//                                        21 => KeyCode::F(10),
+//                                        23 => KeyCode::F(11),
+//                                        24 => KeyCode::F(12),
+//                                        _ => return Ok(Event::Unsupported(nums)),
+//                                    };
+//                                    parse_key_combo(nums[1])
+//                                    match nums[1] {
+//                                        2 => Event::KeyCombo(KeyCombo::Shift(key)),
+//                                        3 => Event::KeyCombo(KeyCombo::Alt(key)),
+//                                        4 => Event::KeyCombo(KeyCombo::AltShift(key)),
+//                                        5 => Event::KeyCombo(KeyCombo::Ctrl(key)),
+//                                        6 => Event::KeyCombo(KeyCombo::CtrlShift(key)),
+//                                        7 => Event::KeyCombo(KeyCombo::AltCtrl(key)),
+//                                        8 => Event::KeyCombo(KeyCombo::AltCtrlShift(key)),
+//                                        _ => Event::Unsupported(nums)
+//                                    }
+//                                },
+                                // TODO: handle all multiple values for key modifiers (ex:
+                                // values
                                 _ => Event::Unsupported(nums),
                             };
                             return Ok(event);
@@ -418,7 +491,18 @@ where
                             "Failed to parse csi code ~ from buffer",
                         ));
                     }
-                    _ => return Err(Error::new(ErrorKind::Other, "Failed to parse csi code ~")),
+                    b'C' => {
+                        if let Ok(str_buf) = String::from_utf8(buf) {
+                            log::warn!("C: {:?}", str_buf);
+                        }
+                        return Err(Error::new(ErrorKind::Other, "Failed to parse csi code C"))
+                    }
+                    _ => return {
+                        if let Ok(str_buf) = String::from_utf8(buf) {
+                            log::warn!("unreadable: {:?}", str_buf);
+                        }
+                        Err(Error::new(ErrorKind::Other, "Failed to parse csi code"))
+                    },
                 };
             };
             return Err(Error::new(
@@ -437,8 +521,8 @@ where
 
 /// Parse `c` as either a single byte ASCII char or a variable size UTF-8 char.
 fn parse_utf8_char<I>(c: u8, iter: &mut I) -> io::Result<char>
-where
-    I: Iterator<Item = io::Result<u8>>,
+    where
+        I: Iterator<Item = io::Result<u8>>,
 {
     if c.is_ascii() {
         Ok(c as char)
@@ -501,34 +585,34 @@ mod test {
     #[test]
     fn test_parse_valid_csi_special_codes() {
         let mut map = HashMap::<_, _>::from_iter(IntoIter::new([
-            ("[1~", Event::Key(Key::Home)),
-            ("[7~", Event::Key(Key::Home)),
-            ("[2~", Event::Key(Key::Insert)),
-            ("[4~", Event::Key(Key::End)),
-            ("[8~", Event::Key(Key::End)),
-            ("[5~", Event::Key(Key::PageUp)),
-            ("[6~", Event::Key(Key::PageDown)),
-            ("[11~", Event::Key(Key::F(1))),
-            ("[12~", Event::Key(Key::F(2))),
-            ("[13~", Event::Key(Key::F(3))),
-            ("[14~", Event::Key(Key::F(4))),
-            ("[15~", Event::Key(Key::F(5))),
-            ("[17~", Event::Key(Key::F(6))),
-            ("[18~", Event::Key(Key::F(7))),
-            ("[19~", Event::Key(Key::F(8))),
-            ("[20~", Event::Key(Key::F(9))),
-            ("[21~", Event::Key(Key::F(10))),
-            ("[23~", Event::Key(Key::F(11))),
-            ("[24~", Event::Key(Key::F(12))),
-            ("[3;2~", Event::KeyCombo(KeyCombo::Shift(Key::Delete))),
-            ("[15;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(5)))),
-            ("[17;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(6)))),
-            ("[18;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(7)))),
-            ("[19;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(8)))),
-            ("[20;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(9)))),
-            ("[21;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(10)))),
-            ("[23;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(11)))),
-            ("[24;2~", Event::KeyCombo(KeyCombo::Shift(Key::F(12)))),
+            ("[1~", Event::Key(Key::new(KeyCode::Home))),
+            ("[7~", Event::Key(Key::new(KeyCode::Home))),
+            ("[2~", Event::Key(Key::new(KeyCode::Insert))),
+            ("[4~", Event::Key(Key::new(KeyCode::End))),
+            ("[8~", Event::Key(Key::new(KeyCode::End))),
+            ("[5~", Event::Key(Key::new(KeyCode::PageUp))),
+            ("[6~", Event::Key(Key::new(KeyCode::PageDown))),
+            ("[11~", Event::Key(Key::new(KeyCode::F(1)))),
+            ("[12~", Event::Key(Key::new(KeyCode::F(2)))),
+            ("[13~", Event::Key(Key::new(KeyCode::F(3)))),
+            ("[14~", Event::Key(Key::new(KeyCode::F(4)))),
+            ("[15~", Event::Key(Key::new(KeyCode::F(5)))),
+            ("[17~", Event::Key(Key::new(KeyCode::F(6)))),
+            ("[18~", Event::Key(Key::new(KeyCode::F(7)))),
+            ("[19~", Event::Key(Key::new(KeyCode::F(8)))),
+            ("[20~", Event::Key(Key::new(KeyCode::F(9)))),
+            ("[21~", Event::Key(Key::new(KeyCode::F(10)))),
+            ("[23~", Event::Key(Key::new(KeyCode::F(11)))),
+            ("[24~", Event::Key(Key::new(KeyCode::F(12)))),
+//            ("[3;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::Delete))),
+//            ("[15;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(5)))),
+//            ("[17;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(6)))),
+//            ("[18;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(7)))),
+//            ("[19;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(8)))),
+//            ("[20;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(9)))),
+//            ("[21;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(10)))),
+//            ("[23;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(11)))),
+//            ("[24;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(12)))),
         ]));
 
         let item = b'\x1B';

@@ -1,11 +1,12 @@
 [package]
 name = "sl-console"
-version = "0.9.0"
+version = "0.10.0"
 authors = [
     "ticki <Ticki@users.noreply.github.com>",
     "gycos <alexandre.bury@gmail.com>",
     "IGI-111 <igi-111@protonmail.com>",
-    "Steven Stanfield <stanfield@scarecrowtech.com>"
+    "Steven Stanfield <stanfield@scarecrowtech.com>",
+    "Price Clark <uofantarctica.edu@gmail.com>"
 ]
 description = "A bindless library for manipulating terminals."
 repository = "https://github.com/sl-sh-dev/sl-console"

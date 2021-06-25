@@ -1,5 +1,5 @@
 use simple_logger::SimpleLogger;
-use sl_console::event::{Event, Key, MouseEvent};
+use sl_console::event::{Event, KeyCode, MouseEvent};
 use sl_console::input::*;
 use sl_console::*;
 use std::io::Write; //MouseTerminal;
@@ -26,7 +26,12 @@ fn main() {
         //let c = console.get_event();
         let evt = c.unwrap();
         match evt {
-            Event::Key(Key::Char('q')) => break,
+            Event::Key(key) => {
+                match key.code {
+                    KeyCode::Char('q') => break,
+                    _ => (),
+                }
+            },
             Event::Mouse(me) => match me {
                 MouseEvent::Press(_, x, y) => {
                     write!(console, "{}x", sl_console::cursor::Goto(x, y)).unwrap();
