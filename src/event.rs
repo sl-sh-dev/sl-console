@@ -452,34 +452,33 @@ where
                                         ))
                                     }
                                 },
-//                                2 => {
-//                                    log::warn!("nums 0: {:?}. 1: {:?}.", nums[0], nums[1]);
-//                                    let key = match nums[0] {
-//                                        3 => KeyCode::Delete,
-//                                        5 => KeyCode::PageUp,
-//                                        6 => KeyCode::PageDown,
-//                                        15 => KeyCode::F(5),
-//                                        17 => KeyCode::F(6),
-//                                        18 => KeyCode::F(7),
-//                                        19 => KeyCode::F(8),
-//                                        20 => KeyCode::F(9),
-//                                        21 => KeyCode::F(10),
-//                                        23 => KeyCode::F(11),
-//                                        24 => KeyCode::F(12),
-//                                        _ => return Ok(Event::Unsupported(nums)),
-//                                    };
-//                                    parse_key_combo(nums[1])
-//                                    match nums[1] {
-//                                        2 => Event::KeyCombo(KeyCombo::Shift(key)),
-//                                        3 => Event::KeyCombo(KeyCombo::Alt(key)),
-//                                        4 => Event::KeyCombo(KeyCombo::AltShift(key)),
-//                                        5 => Event::KeyCombo(KeyCombo::Ctrl(key)),
-//                                        6 => Event::KeyCombo(KeyCombo::CtrlShift(key)),
-//                                        7 => Event::KeyCombo(KeyCombo::AltCtrl(key)),
-//                                        8 => Event::KeyCombo(KeyCombo::AltCtrlShift(key)),
-//                                        _ => Event::Unsupported(nums)
-//                                    }
-//                                },
+                                2 => {
+                                    let key_code = match nums[0] {
+                                        3 => KeyCode::Delete,
+                                        5 => KeyCode::PageUp,
+                                        6 => KeyCode::PageDown,
+                                        15 => KeyCode::F(5),
+                                        17 => KeyCode::F(6),
+                                        18 => KeyCode::F(7),
+                                        19 => KeyCode::F(8),
+                                        20 => KeyCode::F(9),
+                                        21 => KeyCode::F(10),
+                                        23 => KeyCode::F(11),
+                                        24 => KeyCode::F(12),
+                                        _ => return Ok(Event::Unsupported(nums)),
+                                    };
+                                    let mods = match nums[1] {
+                                        2 => KeyMod::Shift,
+                                        3 => KeyMod::Alt,
+                                        4 => KeyMod::AltShift,
+                                        5 => KeyMod::Ctrl,
+                                        6 => KeyMod::CtrlShift,
+                                        7 => KeyMod::AltCtrl,
+                                        8 => KeyMod::AltCtrlShift,
+                                        _ => return Ok(Event::Unsupported(nums)),
+                                    };
+                                    Event::Key(Key::new_mod(key_code, mods))
+                                },
                                 // TODO: handle all multiple values for key modifiers (ex:
                                 // values
                                 _ => Event::Unsupported(nums),
@@ -604,15 +603,15 @@ mod test {
             ("[21~", Event::Key(Key::new(KeyCode::F(10)))),
             ("[23~", Event::Key(Key::new(KeyCode::F(11)))),
             ("[24~", Event::Key(Key::new(KeyCode::F(12)))),
-//            ("[3;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::Delete))),
-//            ("[15;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(5)))),
-//            ("[17;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(6)))),
-//            ("[18;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(7)))),
-//            ("[19;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(8)))),
-//            ("[20;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(9)))),
-//            ("[21;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(10)))),
-//            ("[23;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(11)))),
-//            ("[24;2~", Event::KeyCombo(KeyCombo::Shift(KeyCode::F(12)))),
+            ("[3;2~", Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::Shift))),
+            ("[15;2~", Event::Key(Key::new_mod(KeyCode::F(5), KeyMod::Shift))),
+            ("[17;2~", Event::Key(Key::new_mod(KeyCode::F(6), KeyMod::Shift))),
+            ("[18;2~", Event::Key(Key::new_mod(KeyCode::F(7), KeyMod::Shift))),
+            ("[19;2~", Event::Key(Key::new_mod(KeyCode::F(8),KeyMod::Shift))),
+            ("[20;2~", Event::Key(Key::new_mod(KeyCode::F(9), KeyMod::Shift))),
+            ("[21;2~", Event::Key(Key::new_mod(KeyCode::F(10), KeyMod::Shift))),
+            ("[23;2~", Event::Key(Key::new_mod(KeyCode::F(11), KeyMod::Shift))),
+            ("[24;2~", Event::Key(Key::new_mod(KeyCode::F(12), KeyMod::Shift))),
         ]));
 
         let item = b'\x1B';
