@@ -270,13 +270,16 @@ impl<W: ConsoleWrite> ConsoleWrite for MouseTerminal<W> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use event::{Event, Key, KeyCode, MouseButton, MouseEvent};
+    use event::{Event, Key, KeyCode, KeyMod, MouseButton, MouseEvent};
 
     #[test]
     fn test_keys() {
         let mut i = b"\x1Bayo\x7F\x1B[D".keys();
 
-        assert_eq!(i.next().unwrap().unwrap(), Key::new(KeyCode::Alt('a')));
+        assert_eq!(
+            i.next().unwrap().unwrap(),
+            Key::new_mod(KeyCode::Char('a'), KeyMod::Alt)
+        );
         assert_eq!(i.next().unwrap().unwrap(), Key::new(KeyCode::Char('y')));
         assert_eq!(i.next().unwrap().unwrap(), Key::new(KeyCode::Char('o')));
         assert_eq!(i.next().unwrap().unwrap(), Key::new(KeyCode::Backspace));
@@ -294,10 +297,22 @@ mod test {
             i.next().unwrap().unwrap(),
             Event::Unsupported(vec![0x1B, b'[', 0x00])
         );
-        assert_eq!(i.next().unwrap().unwrap(), Event::Key(Key::new(KeyCode::Char('b'))));
-        assert_eq!(i.next().unwrap().unwrap(), Event::Key(Key::new(KeyCode::Char('c'))));
-        assert_eq!(i.next().unwrap().unwrap(), Event::Key(Key::new(KeyCode::Backspace)));
-        assert_eq!(i.next().unwrap().unwrap(), Event::Key(Key::new(KeyCode::Left)));
+        assert_eq!(
+            i.next().unwrap().unwrap(),
+            Event::Key(Key::new(KeyCode::Char('b')))
+        );
+        assert_eq!(
+            i.next().unwrap().unwrap(),
+            Event::Key(Key::new(KeyCode::Char('c')))
+        );
+        assert_eq!(
+            i.next().unwrap().unwrap(),
+            Event::Key(Key::new(KeyCode::Backspace))
+        );
+        assert_eq!(
+            i.next().unwrap().unwrap(),
+            Event::Key(Key::new(KeyCode::Left))
+        );
         assert_eq!(
             i.next().unwrap().unwrap(),
             Event::Mouse(MouseEvent::Press(MouseButton::WheelUp, 2, 4))
@@ -318,7 +333,10 @@ mod test {
             i.next().unwrap().unwrap(),
             Event::Mouse(MouseEvent::Release(2, 4))
         );
-        assert_eq!(i.next().unwrap().unwrap(), Event::Key(Key::new(KeyCode::Char('b'))));
+        assert_eq!(
+            i.next().unwrap().unwrap(),
+            Event::Key(Key::new(KeyCode::Char('b')))
+        );
         assert!(i.next().is_none());
     }
 

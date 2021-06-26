@@ -1,14 +1,15 @@
-use simple_logger::SimpleLogger;
 use log::LevelFilter;
-use sl_console::event::{KeyCode, Event, KeyMod};
+use simple_logger::SimpleLogger;
+use sl_console::event::{Event, KeyCode, KeyMod};
 use sl_console::*;
 use std::io::Write;
 
 fn main() {
     con_init().unwrap();
-    let sl = SimpleLogger::new()
+    SimpleLogger::new()
         .with_level(LevelFilter::Info)
-        .init().unwrap();
+        .init()
+        .unwrap();
     let mut conin = conin();
     let mut conout = conout();
     let _raw = conout.raw_mode_guard().unwrap();
@@ -24,11 +25,13 @@ fn main() {
     loop {
         conout.flush().unwrap();
         let c = conin.get_event();
-        write!(conout,
-               "{}{}",
-               sl_console::cursor::Goto(5, 5),
-               sl_console::clear::UntilNewline,
-        ).unwrap();
+        write!(
+            conout,
+            "{}{}",
+            sl_console::cursor::Goto(5, 5),
+            sl_console::clear::UntilNewline,
+        )
+        .unwrap();
         let evt = c.unwrap();
         match evt {
             Event::Key(key) => match (key.clone().code, key.clone().mods) {
@@ -39,7 +42,7 @@ fn main() {
             },
             Event::Mouse(me) => {
                 log::info!("Mouse Event: {:?}.", me);
-            },
+            }
             Event::Unsupported(uns) => {
                 log::info!("Unsupported: {:?}.", uns);
             }

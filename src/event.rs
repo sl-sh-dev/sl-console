@@ -75,10 +75,7 @@ impl Key {
     ///
     /// Returns Key
     pub fn new_mod(key: KeyCode, mods: KeyMod) -> Self {
-        Self {
-            code: key,
-            mods,
-        }
+        Self { code: key, mods }
     }
 }
 
@@ -116,12 +113,6 @@ pub enum KeyCode {
     F(u8),
     /// Normal character.
     Char(char),
-    /// Alt modified character.
-    Alt(char),
-    /// Ctrl modified character.
-    ///
-    /// Note that certain keys may not be modifiable with `ctrl`, due to limitations of terminals.
-    Ctrl(char),
     /// Null byte.
     Null,
     /// Esc key.
@@ -133,11 +124,13 @@ pub enum KeyCode {
 pub enum KeyMod {
     /// TODO change me can't Key just return Some(KeyMod)?
     NA,
-    /// Alt
+    /// Alt modifier key
     Alt,
-    /// Ctrl
+    /// Ctrl modifier key
+    /// Note that certain keys may not be modifiable with `ctrl`, due to limitations of terminals.
     Ctrl,
-    /// Shif
+    /// Shift modifier key
+    /// Note that capital letters do not note the `shift` modifier.
     Shift,
     /// Alt + Ctrl
     AltCtrl,
@@ -165,7 +158,9 @@ where
                     Some(Ok(b'O')) => {
                         match iter.next() {
                             // F1-F4
-                            Some(Ok(val @ b'P'..=b'S')) => Event::Key(Key::new(KeyCode::F(1 + val - b'P'))),
+                            Some(Ok(val @ b'P'..=b'S')) => {
+                                Event::Key(Key::new(KeyCode::F(1 + val - b'P')))
+                            }
                             _ => {
                                 return Err(Error::new(
                                     ErrorKind::Other,
@@ -180,7 +175,7 @@ where
                     }
                     Some(Ok(c)) => {
                         let ch = parse_utf8_char(c, iter)?;
-                        Event::Key(Key::new(KeyCode::Alt(ch)))
+                        Event::Key(Key::new_mod(KeyCode::Char(ch), KeyMod::Alt))
                     }
                     Some(Err(_)) | None => {
                         return Err(Error::new(ErrorKind::Other, "Could not parse an event"))
@@ -190,8 +185,14 @@ where
             b'\n' | b'\r' => Ok(Event::Key(Key::new(KeyCode::Char('\n')))),
             b'\t' => Ok(Event::Key(Key::new(KeyCode::Char('\t')))),
             b'\x7F' => Ok(Event::Key(Key::new(KeyCode::Backspace))),
-            c @ b'\x01'..=b'\x1A' => Ok(Event::Key(Key::new(KeyCode::Ctrl((c as u8 - 0x1 + b'a') as char)))),
-            c @ b'\x1C'..=b'\x1F' => Ok(Event::Key(Key::new(KeyCode::Ctrl((c as u8 - 0x1C + b'4') as char)))),
+            c @ b'\x01'..=b'\x1A' => Ok(Event::Key(Key::new_mod(
+                KeyCode::Char((c as u8 - 0x1 + b'a') as char),
+                KeyMod::Ctrl,
+            ))),
+            c @ b'\x1C'..=b'\x1F' => Ok(Event::Key(Key::new_mod(
+                KeyCode::Char((c as u8 - 0x1C + b'4') as char),
+                KeyMod::Ctrl,
+            ))),
             b'\0' => Ok(Event::Key(Key::new(KeyCode::Null))),
             c => Ok({
                 let ch = parse_utf8_char(c, iter)?;
@@ -213,14 +214,14 @@ where
         Ok(event) => {
             if let Ok(control_str) = String::from_utf8(control_seq.clone()) {
                 log::trace!(
-                    "key: {:?}, dec: {:?}, ascii: {:?}.",
+                    "key: {:?}, dec: {:?}, ascii: {:?}.\n",
                     event,
                     control_seq,
                     control_str
                 );
             } else {
                 log::trace!(
-                    "key: {:?}, dec: {:?}, ascii: [failed to parse]",
+                    "key: {:?}, dec: {:?}, ascii: [failed to parse]\n",
                     event,
                     control_seq
                 )
@@ -253,7 +254,63 @@ where
     }
     None
 }
+/// TODO list of broken codes
+/// Shift + Insert
+/// any mods  + Backspace
+/// any mods + Tab except BackTab
 
+fn parse_special_key_code(code: u8) -> Option<KeyCode> {
+    let code = match code {
+        2 => KeyCode::Insert,
+        3 => KeyCode::Delete,
+        5 => KeyCode::PageUp,
+        6 => KeyCode::PageDown,
+        15 => KeyCode::F(5),
+        17 => KeyCode::F(6),
+        18 => KeyCode::F(7),
+        19 => KeyCode::F(8),
+        20 => KeyCode::F(9),
+        21 => KeyCode::F(10),
+        23 => KeyCode::F(11),
+        24 => KeyCode::F(12),
+        _ => return None,
+    };
+    Some(code)
+}
+
+fn parse_other_special_key_code(code: u8) -> Option<KeyCode> {
+    let code = match code {
+        b'D' => KeyCode::Left,
+        b'C' => KeyCode::Right,
+        b'A' => KeyCode::Up,
+        b'B' => KeyCode::Down,
+        b'H' => KeyCode::Home,
+        b'F' => KeyCode::End,
+        b'Z' => KeyCode::BackTab,
+        b'P' => KeyCode::F(1),
+        b'Q' => KeyCode::F(2),
+        b'R' => KeyCode::F(3),
+        b'S' => KeyCode::F(4),
+        _ => return None,
+    };
+    Some(code)
+}
+
+fn parse_key_mods(mods: u8) -> Option<KeyMod> {
+    let mods = match mods {
+        2 => KeyMod::Shift,
+        3 => KeyMod::Alt,
+        4 => KeyMod::AltShift,
+        5 => KeyMod::Ctrl,
+        6 => KeyMod::CtrlShift,
+        7 => KeyMod::AltCtrl,
+        8 => KeyMod::AltCtrlShift,
+        _ => return None,
+    };
+    Some(mods)
+}
+
+// TODO add mouse events to parse_csi
 /// Parses a CSI sequence, just after reading ^[
 ///
 /// Returns Result<Event, io::Error>, Event may be unsupported.
@@ -427,7 +484,6 @@ where
                                     nums.push(c);
                                 }
                             }
-                            log::warn!("nums is: {:?}.", nums);
                             let event = match nums.len() {
                                 0 => {
                                     return Err(Error::new(
@@ -453,34 +509,16 @@ where
                                     }
                                 },
                                 2 => {
-                                    let key_code = match nums[0] {
-                                        3 => KeyCode::Delete,
-                                        5 => KeyCode::PageUp,
-                                        6 => KeyCode::PageDown,
-                                        15 => KeyCode::F(5),
-                                        17 => KeyCode::F(6),
-                                        18 => KeyCode::F(7),
-                                        19 => KeyCode::F(8),
-                                        20 => KeyCode::F(9),
-                                        21 => KeyCode::F(10),
-                                        23 => KeyCode::F(11),
-                                        24 => KeyCode::F(12),
-                                        _ => return Ok(Event::Unsupported(nums)),
-                                    };
-                                    let mods = match nums[1] {
-                                        2 => KeyMod::Shift,
-                                        3 => KeyMod::Alt,
-                                        4 => KeyMod::AltShift,
-                                        5 => KeyMod::Ctrl,
-                                        6 => KeyMod::CtrlShift,
-                                        7 => KeyMod::AltCtrl,
-                                        8 => KeyMod::AltCtrlShift,
-                                        _ => return Ok(Event::Unsupported(nums)),
-                                    };
-                                    Event::Key(Key::new_mod(key_code, mods))
-                                },
-                                // TODO: handle all multiple values for key modifiers (ex:
-                                // values
+                                    if let Some(key_code) = parse_special_key_code(nums[0]) {
+                                        if let Some(mods) = parse_key_mods(nums[1]) {
+                                            Event::Key(Key::new_mod(key_code, mods))
+                                        } else {
+                                            Event::Unsupported(nums)
+                                        }
+                                    } else {
+                                        Event::Unsupported(nums)
+                                    }
+                                }
                                 _ => Event::Unsupported(nums),
                             };
                             return Ok(event);
@@ -490,18 +528,32 @@ where
                             "Failed to parse csi code ~ from buffer",
                         ));
                     }
-                    b'C' => {
+                    val
+                    @
+                    (b'D' | b'C' | b'A' | b'B' | b'H' | b'F' | b'Z' | b'P' | b'Q' | b'R'
+                    | b'S') => {
                         if let Ok(str_buf) = String::from_utf8(buf) {
-                            log::warn!("C: {:?}", str_buf);
+                            let mut nums: Vec<u8> = vec![];
+                            for i in str_buf.split(';') {
+                                if let Ok(c) = i.parse::<u8>() {
+                                    nums.push(c);
+                                }
+                            }
+                            if nums.len() == 2 {
+                                if let Some(mods) = parse_key_mods(nums[1]) {
+                                    if let Some(key_code) = parse_other_special_key_code(val) {
+                                        return Ok(Event::Key(Key::new_mod(key_code, mods)));
+                                    }
+                                }
+                            }
+                            return Ok(Event::Unsupported(nums));
                         }
-                        return Err(Error::new(ErrorKind::Other, "Failed to parse csi code C"))
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            "Failed to parse csi code LETTER",
+                        ));
                     }
-                    _ => return {
-                        if let Ok(str_buf) = String::from_utf8(buf) {
-                            log::warn!("unreadable: {:?}", str_buf);
-                        }
-                        Err(Error::new(ErrorKind::Other, "Failed to parse csi code"))
-                    },
+                    _ => return { Err(Error::new(ErrorKind::Other, "Failed to parse csi code")) },
                 };
             };
             return Err(Error::new(
@@ -520,8 +572,8 @@ where
 
 /// Parse `c` as either a single byte ASCII char or a variable size UTF-8 char.
 fn parse_utf8_char<I>(c: u8, iter: &mut I) -> io::Result<char>
-    where
-        I: Iterator<Item = io::Result<u8>>,
+where
+    I: Iterator<Item = io::Result<u8>>,
 {
     if c.is_ascii() {
         Ok(c as char)
@@ -603,23 +655,74 @@ mod test {
             ("[21~", Event::Key(Key::new(KeyCode::F(10)))),
             ("[23~", Event::Key(Key::new(KeyCode::F(11)))),
             ("[24~", Event::Key(Key::new(KeyCode::F(12)))),
-            ("[3;2~", Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::Shift))),
-            ("[3;3~", Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::Alt))),
-            ("[3;4~", Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::AltShift))),
-            ("[3;5~", Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::Ctrl))),
-            ("[3;6~", Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::CtrlShift))),
-            ("[3;7~", Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::AltCtrl))),
-            ("[3;8~", Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::AltCtrlShift))),
-            ("[5;2~", Event::Key(Key::new_mod(KeyCode::PageUp, KeyMod::Shift))),
-            ("[6;2~", Event::Key(Key::new_mod(KeyCode::PageDown, KeyMod::Shift))),
-            ("[15;2~", Event::Key(Key::new_mod(KeyCode::F(5), KeyMod::Shift))),
-            ("[17;2~", Event::Key(Key::new_mod(KeyCode::F(6), KeyMod::Shift))),
-            ("[18;2~", Event::Key(Key::new_mod(KeyCode::F(7), KeyMod::Shift))),
-            ("[19;2~", Event::Key(Key::new_mod(KeyCode::F(8),KeyMod::Shift))),
-            ("[20;2~", Event::Key(Key::new_mod(KeyCode::F(9), KeyMod::Shift))),
-            ("[21;2~", Event::Key(Key::new_mod(KeyCode::F(10), KeyMod::Shift))),
-            ("[23;2~", Event::Key(Key::new_mod(KeyCode::F(11), KeyMod::Shift))),
-            ("[24;2~", Event::Key(Key::new_mod(KeyCode::F(12), KeyMod::Shift))),
+            (
+                "[3;2~",
+                Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::Shift)),
+            ),
+            (
+                "[3;3~",
+                Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::Alt)),
+            ),
+            (
+                "[3;4~",
+                Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::AltShift)),
+            ),
+            (
+                "[3;5~",
+                Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::Ctrl)),
+            ),
+            (
+                "[3;6~",
+                Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::CtrlShift)),
+            ),
+            (
+                "[3;7~",
+                Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::AltCtrl)),
+            ),
+            (
+                "[3;8~",
+                Event::Key(Key::new_mod(KeyCode::Delete, KeyMod::AltCtrlShift)),
+            ),
+            (
+                "[5;2~",
+                Event::Key(Key::new_mod(KeyCode::PageUp, KeyMod::Shift)),
+            ),
+            (
+                "[6;2~",
+                Event::Key(Key::new_mod(KeyCode::PageDown, KeyMod::Shift)),
+            ),
+            (
+                "[15;2~",
+                Event::Key(Key::new_mod(KeyCode::F(5), KeyMod::Shift)),
+            ),
+            (
+                "[17;2~",
+                Event::Key(Key::new_mod(KeyCode::F(6), KeyMod::Shift)),
+            ),
+            (
+                "[18;2~",
+                Event::Key(Key::new_mod(KeyCode::F(7), KeyMod::Shift)),
+            ),
+            (
+                "[19;2~",
+                Event::Key(Key::new_mod(KeyCode::F(8), KeyMod::Shift)),
+            ),
+            (
+                "[20;2~",
+                Event::Key(Key::new_mod(KeyCode::F(9), KeyMod::Shift)),
+            ),
+            (
+                "[21;2~",
+                Event::Key(Key::new_mod(KeyCode::F(10), KeyMod::Shift)),
+            ),
+            (
+                "[23;2~",
+                Event::Key(Key::new_mod(KeyCode::F(11), KeyMod::Shift)),
+            ),
+            (
+                "[24;2~",
+                Event::Key(Key::new_mod(KeyCode::F(12), KeyMod::Shift)),
+            ),
         ]));
 
         let item = b'\x1B';

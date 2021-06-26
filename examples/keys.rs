@@ -1,4 +1,4 @@
-use sl_console::event::KeyCode;
+use sl_console::event::{KeyCode, KeyMod};
 use sl_console::input::TermRead;
 use sl_console::*;
 use std::io::Write;
@@ -29,18 +29,11 @@ fn main() {
         .unwrap();
 
         let key = c.unwrap();
-        match key.code {
-            KeyCode::Char('q') => break,
-            KeyCode::Char(c) => println!("{}", c),
-            KeyCode::Alt(c) => println!("^{}", c),
-            KeyCode::Ctrl(c) => println!("*{}", c),
-            KeyCode::Esc => println!("ESC"),
-            KeyCode::Left => println!("←"),
-            KeyCode::Right => println!("→"),
-            KeyCode::Up => println!("↑"),
-            KeyCode::Down => println!("↓"),
-            KeyCode::Backspace => println!("×"),
-            _ => {}
+        match (key.code, key.mods) {
+            (KeyCode::Char('q'), KeyMod::NA) => break,
+            (k, m) => {
+                println!("key: {:?}, mods: {:?}.", k, m);
+            }
         }
         conout.flush().unwrap();
     }

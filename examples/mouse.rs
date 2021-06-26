@@ -24,11 +24,9 @@ fn main() {
         let c = conin.get_event();
         let evt = c.unwrap();
         match evt {
-            Event::Key(key) => {
-                match key.code {
-                    KeyCode::Char('q') => break,
-                    _ => {},
-                }
+            Event::Key(key) => match key.code {
+                KeyCode::Char('q') => break,
+                _ => {}
             },
             Event::Mouse(me) => match me {
                 MouseEvent::Press(_, a, b) | MouseEvent::Release(a, b) | MouseEvent::Hold(a, b) => {
@@ -48,7 +46,6 @@ fn main() {
             },
             _ => {}
         }
-
         console.flush().unwrap();
     }
 }

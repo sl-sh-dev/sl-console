@@ -615,7 +615,7 @@ impl<R: ConsoleRead, W: Write> Game<R, W> {
                             write!(self.conout, "{}", clear::All).unwrap();
                             self.reset();
                             return true;
-                        },
+                        }
                         KeyCode::Char('q') => return false,
                         _ => {}
                     }

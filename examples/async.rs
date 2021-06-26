@@ -26,12 +26,10 @@ fn main() {
         write!(conout, "\r{:?}    <- This demonstrates the async read input char. Between each update a 100 ms. is waited, simply to demonstrate the async fashion. \n\r", evt).unwrap();
         match evt {
             Ok(evt) => match evt {
-                Event::Key(key) => {
-                    match key.code {
-                        KeyCode::Char('q') => break,
-                        KeyCode::Char('b') =>  conin.set_blocking(!conin.is_blocking()),
-                        _ => {}
-                    }
+                Event::Key(key) => match key.code {
+                    KeyCode::Char('q') => break,
+                    KeyCode::Char('b') => conin.set_blocking(!conin.is_blocking()),
+                    _ => {}
                 },
                 _ => {}
             },
