@@ -1,4 +1,3 @@
-use simple_logger::SimpleLogger;
 use sl_console::cursor::{self, CursorPos};
 use sl_console::event::*;
 use sl_console::input::*;
@@ -7,7 +6,6 @@ use std::io::Write;
 
 fn main() {
     con_init().unwrap();
-    SimpleLogger::new().init().unwrap();
 
     let mut console = conout();
     let _raw = console.raw_mode_guard().unwrap();

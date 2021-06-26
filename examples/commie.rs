@@ -1,6 +1,5 @@
 use sl_console::{clear, color, cursor};
 
-use simple_logger::SimpleLogger;
 use std::{thread, time};
 
 const COMMUNISM: &'static str = r#"
@@ -25,7 +24,6 @@ const COMMUNISM: &'static str = r#"
 "#;
 
 fn main() {
-    SimpleLogger::new().init().unwrap();
     let mut state = 0;
 
     println!(
