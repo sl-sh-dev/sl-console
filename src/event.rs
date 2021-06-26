@@ -57,7 +57,7 @@ pub struct Key {
     pub code: KeyCode,
     /// any key modifier ctrl + alt + shift (excluding capital letters w/ shift) that could be
     /// pressed.
-    pub mods: KeyMod,
+    pub mods: Option<KeyMod>,
 }
 
 impl Key {
@@ -67,7 +67,7 @@ impl Key {
     pub fn new(key: KeyCode) -> Self {
         Self {
             code: key,
-            mods: KeyMod::NA,
+            mods: None,
         }
     }
 
@@ -75,7 +75,10 @@ impl Key {
     ///
     /// Returns Key
     pub fn new_mod(key: KeyCode, mods: KeyMod) -> Self {
-        Self { code: key, mods }
+        Self {
+            code: key,
+            mods: Some(mods),
+        }
     }
 }
 
@@ -122,8 +125,6 @@ pub enum KeyCode {
 /// Key combinations for keys besides Alt(char) and Ctrl(char) in
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum KeyMod {
-    /// TODO change me can't Key just return Some(KeyMod)?
-    NA,
     /// Alt modifier key
     Alt,
     /// Ctrl modifier key
@@ -254,10 +255,6 @@ where
     }
     None
 }
-/// TODO list of broken codes
-/// Shift + Insert
-/// any mods  + Backspace
-/// any mods + Tab except BackTab
 
 fn parse_special_key_code(code: u8) -> Option<KeyCode> {
     let code = match code {
@@ -553,7 +550,7 @@ where
                             "Failed to parse csi code LETTER",
                         ));
                     }
-                    _ => return { Err(Error::new(ErrorKind::Other, "Failed to parse csi code")) },
+                    _ => return Err(Error::new(ErrorKind::Other, "Failed to parse csi code")),
                 };
             };
             return Err(Error::new(

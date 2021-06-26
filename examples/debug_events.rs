@@ -1,6 +1,6 @@
 use log::LevelFilter;
 use simple_logger::SimpleLogger;
-use sl_console::event::{Event, KeyCode, KeyMod};
+use sl_console::event::{Event, KeyCode};
 use sl_console::*;
 use std::io::Write;
 
@@ -35,7 +35,7 @@ fn main() {
         let evt = c.unwrap();
         match evt {
             Event::Key(key) => match (key.clone().code, key.clone().mods) {
-                (KeyCode::Char('q'), KeyMod::NA) => break,
+                (KeyCode::Char('q'), None) => break,
                 _ => {
                     log::info!("Key: {:?}.", key);
                 }

@@ -1,4 +1,4 @@
-use sl_console::event::{KeyCode, KeyMod};
+use sl_console::event::KeyCode;
 use sl_console::input::TermRead;
 use sl_console::*;
 use std::io::Write;
@@ -30,7 +30,7 @@ fn main() {
 
         let key = c.unwrap();
         match (key.code, key.mods) {
-            (KeyCode::Char('q'), KeyMod::NA) => break,
+            (KeyCode::Char('q'), None) => break,
             (k, m) => {
                 println!("key: {:?}, mods: {:?}.", k, m);
             }
