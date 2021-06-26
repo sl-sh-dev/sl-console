@@ -139,7 +139,7 @@ pub enum KeyMod {
     AltShift,
     /// Ctrl + Shift
     CtrlShift,
-    /// Alt + Ctrl
+    /// Alt + Ctrl + Shift
     AltCtrlShift,
 }
 
@@ -176,7 +176,15 @@ where
                     }
                     Some(Ok(c)) => {
                         let ch = parse_utf8_char(c, iter)?;
-                        Event::Key(Key::new_mod(KeyCode::Char(ch), KeyMod::Alt))
+                        match c {
+                            c @ b'\x01'..=b'\x1A' => Event::Key(Key::new_mod(
+                                KeyCode::Char((ch as u8 - 0x1 + b'a') as char),
+                                KeyMod::AltCtrl,
+                            )),
+                            _ => {
+                                Event::Key(Key::new_mod(KeyCode::Char(ch), KeyMod::Alt))
+                            }
+                        }
                     }
                     Some(Err(_)) | None => {
                         return Err(Error::new(ErrorKind::Other, "Could not parse an event"))
