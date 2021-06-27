@@ -162,10 +162,22 @@ where
                             Some(Ok(val @ b'P'..=b'S')) => {
                                 Event::Key(Key::new(KeyCode::F(1 + val - b'P')))
                             }
+                            Some(Ok(b'5')) => match iter.next() {
+                                Some(Ok(val @ b'P'..=b'S')) => Event::Key(Key::new_mod(
+                                    KeyCode::F(1 + val - b'P'),
+                                    KeyMod::Ctrl,
+                                )),
+                                _ => {
+                                    return Err(Error::new(
+                                        ErrorKind::Other,
+                                        "Unknown escape code after ESC O 5",
+                                    ))
+                                }
+                            },
                             _ => {
                                 return Err(Error::new(
                                     ErrorKind::Other,
-                                    "Could not parse an event",
+                                    "Unknown escape code after ESC O",
                                 ))
                             }
                         }
@@ -177,13 +189,11 @@ where
                     Some(Ok(c)) => {
                         let ch = parse_utf8_char(c, iter)?;
                         match c {
-                            c @ b'\x01'..=b'\x1A' => Event::Key(Key::new_mod(
+                            b'\x01'..=b'\x1A' => Event::Key(Key::new_mod(
                                 KeyCode::Char((ch as u8 - 0x1 + b'a') as char),
                                 KeyMod::AltCtrl,
                             )),
-                            _ => {
-                                Event::Key(Key::new_mod(KeyCode::Char(ch), KeyMod::Alt))
-                            }
+                            _ => Event::Key(Key::new_mod(KeyCode::Char(ch), KeyMod::Alt)),
                         }
                     }
                     Some(Err(_)) | None => {
@@ -266,23 +276,21 @@ where
 
 fn parse_special_key_code(code: u8) -> Option<KeyCode> {
     let code = match code {
+        1 | 7 => KeyCode::Home,
         2 => KeyCode::Insert,
         3 => KeyCode::Delete,
+        4 | 8 => KeyCode::End,
         5 => KeyCode::PageUp,
         6 => KeyCode::PageDown,
-        15 => KeyCode::F(5),
-        17 => KeyCode::F(6),
-        18 => KeyCode::F(7),
-        19 => KeyCode::F(8),
-        20 => KeyCode::F(9),
-        21 => KeyCode::F(10),
-        23 => KeyCode::F(11),
-        24 => KeyCode::F(12),
+        v @ 11..=15 => KeyCode::F(v - 10),
+        v @ 17..=21 => KeyCode::F(v - 11),
+        v @ 23..=24 => KeyCode::F(v - 12),
         _ => return None,
     };
     Some(code)
 }
 
+//TODO this is dubious... can it be merged with parse_special_key_code?
 fn parse_other_special_key_code(code: u8) -> Option<KeyCode> {
     let code = match code {
         b'D' => KeyCode::Left,
@@ -315,7 +323,7 @@ fn parse_key_mods(mods: u8) -> Option<KeyMod> {
     Some(mods)
 }
 
-// TODO add mouse events to parse_csi
+// TODO add cursor events to parse_csi
 /// Parses a CSI sequence, just after reading ^[
 ///
 /// Returns Result<Event, io::Error>, Event may be unsupported.
@@ -444,6 +452,26 @@ where
                     }
                 }
                 match c {
+                    b'^' => {
+                        // rxvt ctrl codes for mod + special keys:
+                        // ESC [ x ^
+                        if let Ok(str_buf) = String::from_utf8(buf) {
+                            if let Ok(to_int) = str_buf.parse::<u8>() {
+                                return if let Some(code) = parse_special_key_code(to_int) {
+                                    Ok(Event::Key(Key::new_mod(code, KeyMod::Ctrl)))
+                                } else {
+                                    Err(Error::new(
+                                        ErrorKind::Other,
+                                        "Unrecognized rxvt key encoding.",
+                                    ))
+                                };
+                            }
+                        }
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            "Failed to parse rxvt mod + special keys.",
+                        ));
+                    }
                     // rxvt mouse encoding:
                     // ESC [ Cb ; Cx ; Cy ; M
                     b'M' => {
@@ -496,23 +524,13 @@ where
                                         "Failed to parse csi ~, buffer is empty",
                                     ))
                                 }
-                                1 => match nums[0] {
-                                    1 | 7 => Event::Key(Key::new(KeyCode::Home)),
-                                    2 => Event::Key(Key::new(KeyCode::Insert)),
-                                    3 => Event::Key(Key::new(KeyCode::Delete)),
-                                    4 | 8 => Event::Key(Key::new(KeyCode::End)),
-                                    5 => Event::Key(Key::new(KeyCode::PageUp)),
-                                    6 => Event::Key(Key::new(KeyCode::PageDown)),
-                                    v @ 11..=15 => Event::Key(Key::new(KeyCode::F(v - 10))),
-                                    v @ 17..=21 => Event::Key(Key::new(KeyCode::F(v - 11))),
-                                    v @ 23..=24 => Event::Key(Key::new(KeyCode::F(v - 12))),
-                                    _ => {
-                                        return Err(Error::new(
-                                            ErrorKind::Other,
-                                            "Failed to parse csi code ~, unexpected value",
-                                        ))
+                                1 => {
+                                    if let Some(code) = parse_special_key_code(nums[0]) {
+                                        Event::Key(Key::new(code))
+                                    } else {
+                                        Event::Unsupported(nums)
                                     }
-                                },
+                                }
                                 2 => {
                                     if let Some(key_code) = parse_special_key_code(nums[0]) {
                                         if let Some(mods) = parse_key_mods(nums[1]) {
@@ -613,6 +631,7 @@ where
     }
 }
 
+// TODO finish writing tests
 #[cfg(test)]
 mod test {
     use super::*;
@@ -634,7 +653,7 @@ mod test {
     fn test_parse_event(item: u8, map: &mut HashMap<&str, Event>) {
         for (key, val) in map.iter() {
             let mut iter = key.bytes().map(|x| Ok(x));
-            assert_eq!(parse_event(item, &mut iter).unwrap(), *val)
+            assert_eq!(*val, parse_event(item, &mut iter).unwrap())
         }
     }
 
@@ -643,11 +662,16 @@ mod test {
         let mut map = HashMap::<_, _>::from_iter(IntoIter::new([
             ("[1~", Event::Key(Key::new(KeyCode::Home))),
             ("[7~", Event::Key(Key::new(KeyCode::Home))),
+            ("[7^", Event::Key(Key::new_mod(KeyCode::Home, KeyMod::Ctrl))),
             ("[2~", Event::Key(Key::new(KeyCode::Insert))),
             ("[4~", Event::Key(Key::new(KeyCode::End))),
             ("[8~", Event::Key(Key::new(KeyCode::End))),
             ("[5~", Event::Key(Key::new(KeyCode::PageUp))),
             ("[6~", Event::Key(Key::new(KeyCode::PageDown))),
+            (
+                "[11^",
+                Event::Key(Key::new_mod(KeyCode::F(1), KeyMod::Ctrl)),
+            ),
             ("[11~", Event::Key(Key::new(KeyCode::F(1)))),
             ("[12~", Event::Key(Key::new(KeyCode::F(2)))),
             ("[13~", Event::Key(Key::new(KeyCode::F(3)))),
@@ -760,6 +784,17 @@ mod test {
             ("[<3;65;8;m", Event::Mouse(MouseEvent::Release(65, 8))),
             ("[<32;113;234;m", Event::Mouse(MouseEvent::Hold(113, 234))),
         ]));
+
+        let item = b'\x1B';
+        test_parse_event(item, &mut map);
+    }
+
+    #[test]
+    fn test_parse_non_csi_escape_codes() {
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([(
+            "O5P^",
+            Event::Key(Key::new_mod(KeyCode::F(1), KeyMod::Ctrl)),
+        )]));
 
         let item = b'\x1B';
         test_parse_event(item, &mut map);
