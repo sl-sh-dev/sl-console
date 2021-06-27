@@ -573,7 +573,7 @@ where
                         }
                         return Err(Error::new(
                             ErrorKind::Other,
-                            "Failed to parse csi code LETTER",
+                            "Failed to parse csi code.",
                         ));
                     }
                     _ => return Err(Error::new(ErrorKind::Other, "Failed to parse csi code")),
@@ -790,11 +790,80 @@ mod test {
     }
 
     #[test]
-    fn test_parse_non_csi_escape_codes() {
+    fn test_parse_ctrl_key_alphanumeric() {
+        // a
         let mut map = HashMap::<_, _>::from_iter(IntoIter::new([(
-            "O5P^",
-            Event::Key(Key::new_mod(KeyCode::F(1), KeyMod::Ctrl)),
+            "",
+            Event::Key(Key::new_mod(KeyCode::Char('a'), KeyMod::Ctrl)),
         )]));
+
+        let item = b'\x01';
+        test_parse_event(item, &mut map);
+
+        // z
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([(
+            "",
+            Event::Key(Key::new_mod(KeyCode::Char('z'), KeyMod::Ctrl)),
+        )]));
+
+        let item = b'\x1A';
+        test_parse_event(item, &mut map);
+
+        // 4
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([(
+            "",
+            Event::Key(Key::new_mod(KeyCode::Char('4'), KeyMod::Ctrl)),
+        )]));
+
+        let item = b'\x1C';
+        test_parse_event(item, &mut map);
+
+        // 7
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([(
+            "",
+            Event::Key(Key::new_mod(KeyCode::Char('7'), KeyMod::Ctrl)),
+        )]));
+
+        let item = b'\x1F';
+        test_parse_event(item, &mut map);
+    }
+
+    #[test]
+    fn test_parse_non_csi_escape_codes() {
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([
+            (
+                "O5P^",
+                Event::Key(Key::new_mod(KeyCode::F(1), KeyMod::Ctrl)),
+            ),
+            (
+                "O5Q^",
+                Event::Key(Key::new_mod(KeyCode::F(2), KeyMod::Ctrl)),
+            ),
+            (
+                "O5R^",
+                Event::Key(Key::new_mod(KeyCode::F(3), KeyMod::Ctrl)),
+            ),
+            (
+                "O5S^",
+                Event::Key(Key::new_mod(KeyCode::F(4), KeyMod::Ctrl)),
+            ),
+            (
+                "\u{1}",
+                Event::Key(Key::new_mod(KeyCode::Char('a'), KeyMod::AltCtrl)),
+            ),
+            (
+                "\u{1a}",
+                Event::Key(Key::new_mod(KeyCode::Char('z'), KeyMod::AltCtrl)),
+            ),
+            (
+                "\u{61}",
+                Event::Key(Key::new_mod(KeyCode::Char('a'), KeyMod::Alt)),
+            ),
+            (
+                "\u{7a}",
+                Event::Key(Key::new_mod(KeyCode::Char('z'), KeyMod::Alt)),
+            ),
+        ]));
 
         let item = b'\x1B';
         test_parse_event(item, &mut map);

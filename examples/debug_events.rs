@@ -8,7 +8,8 @@ fn main() {
     con_init().unwrap();
     SimpleLogger::new()
         .with_level(LevelFilter::Trace)
-        .init().unwrap();
+        .init()
+        .unwrap();
     let mut conin = conin();
     let mut conout = conout();
     let _raw = conout.raw_mode_guard().unwrap();
