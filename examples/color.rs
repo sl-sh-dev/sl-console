@@ -1,4 +1,3 @@
-use simple_logger::SimpleLogger;
 use sl_console::{color, con_init, style};
 
 fn main() {
@@ -7,7 +6,6 @@ fn main() {
     // XXX Add a better way to enable escape codes on windows for something
     // lightweight like this?
     con_init().unwrap();
-    SimpleLogger::new().init().unwrap();
     println!("{}Red", color::Fg(color::Red));
     println!("{}Blue", color::Fg(color::Blue));
     println!("{}Blue'n'Bold{}", style::Bold, style::Reset);

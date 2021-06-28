@@ -1,4 +1,3 @@
-use simple_logger::SimpleLogger;
 use sl_console::cursor::{self, CursorPos};
 use sl_console::event::*;
 use sl_console::input::*;
@@ -7,7 +6,6 @@ use std::io::Write;
 
 fn main() {
     con_init().unwrap();
-    SimpleLogger::new().init().unwrap();
 
     let mut console = conout();
     let _raw = console.raw_mode_guard().unwrap();
@@ -26,7 +24,10 @@ fn main() {
         let c = conin.get_event();
         let evt = c.unwrap();
         match evt {
-            Event::Key(Key::Char('q')) => break,
+            Event::Key(key) => match key.code {
+                KeyCode::Char('q') => break,
+                _ => {}
+            },
             Event::Mouse(me) => match me {
                 MouseEvent::Press(_, a, b) | MouseEvent::Release(a, b) | MouseEvent::Hold(a, b) => {
                     write!(console, "{}", cursor::Goto(a, b)).unwrap();
@@ -45,7 +46,6 @@ fn main() {
             },
             _ => {}
         }
-
         console.flush().unwrap();
     }
 }

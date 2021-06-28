@@ -342,9 +342,9 @@ impl<R: ConsoleRead, W: Write> Game<R, W> {
             } else {
                 continue;
             };
-            use sl_console::event::Key::*;
+            use sl_console::event::KeyCode::*;
             match event {
-                Event::Key(ch) => match ch {
+                Event::Key(ch) => match ch.code {
                     Char('h') | Char('a') | Left => self.x = self.left(self.x),
                     Char('j') | Char('s') | Down => self.y = self.down(self.y),
                     Char('k') | Char('w') | Up => self.y = self.up(self.y),
@@ -608,13 +608,18 @@ impl<R: ConsoleRead, W: Write> Game<R, W> {
             // Repeatedly read a single key.
             let key = self.conin.get_key();
             match key {
-                Ok(Key::Char('r')) => {
-                    // Replay!
-                    write!(self.conout, "{}", clear::All).unwrap();
-                    self.reset();
-                    return true;
+                Ok(key) => {
+                    match key.code {
+                        KeyCode::Char('r') => {
+                            // Replay!
+                            write!(self.conout, "{}", clear::All).unwrap();
+                            self.reset();
+                            return true;
+                        }
+                        KeyCode::Char('q') => return false,
+                        _ => {}
+                    }
                 }
-                Ok(Key::Char('q')) => return false,
                 _ => {}
             }
         }

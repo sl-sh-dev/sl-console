@@ -1,8 +1,6 @@
-use simple_logger::SimpleLogger;
 use sl_console::{color, style};
 
 fn main() {
-    SimpleLogger::new().init().unwrap();
     println!("{lighgreen}-- src/test/ui/borrow-errors.rs at 82:18 --\n\
               {red}error: {reset}{bold}two closures require unique access to `vec` at the same time {reset}{bold}{magenta}[E0524]{reset}\n\
               {line_num_fg}{line_num_bg}79 {reset}     let append = |e| {{\n\

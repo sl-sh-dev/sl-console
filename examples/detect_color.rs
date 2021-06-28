@@ -1,11 +1,9 @@
-use simple_logger::SimpleLogger;
 use sl_console::color::{AnsiValue, AvailableColors, Bg};
 use sl_console::*;
 use std::io::*;
 
 fn main() {
     con_init().unwrap();
-    SimpleLogger::new().init().unwrap();
     let mut term = conin();
     let count = term.available_colors().unwrap();
     let mut conout = conout();
