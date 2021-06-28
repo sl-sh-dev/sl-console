@@ -286,6 +286,8 @@ where
     None
 }
 
+/// Reference for parse_special_key_code, parse_other_special_key_code, and parse_key_mods
+/// https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
 fn parse_special_key_code(code: u8) -> Option<KeyCode> {
     let code = match code {
         1 | 7 => KeyCode::Home,
