@@ -52,6 +52,18 @@ pub enum MouseButton {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 /// Struct representing a Key composed of a KeyCode and KeyMod
+/// Note that certain KeyCode + KeyMod combinations are not
+/// supported:
+/// - KeyMod::AltCtrlShift and KeyCode::Char(<any>), e.g. KeyCode::Char('h')
+/// will report Key { code: Char('h), mods: KeyMod::CtrlAlt despite the
+/// shift key being pressed due to limitations
+/// - KeyMod::AltCtrl and KeyCode::Char(0..=9) are not supported.
+/// - KeyMod::CtrlShift and KeyCode::Char(0..=9) are not supported
+/// - Any modifier keys and Backspace/Tab are not supported, save
+/// KeyMod::Shift and KeyCode::Tab which is KeyCode::BackTab
+/// - Shift+Insert is not supported
+/// - Some terminals do not support modifier keys and certain
+/// non alpha-numeric keys
 pub struct Key {
     /// any key that could be pressed
     pub code: KeyCode,
