@@ -582,8 +582,7 @@ where
                         }
                         return Err(Error::new(
                             ErrorKind::Other,
-                            "Failed to parse special csi \
-                        code",
+                            "Failed to parse special csi code",
                         ));
                     }
                     _ => return Err(Error::new(ErrorKind::Other, "Failed to parse csi code")),
@@ -641,7 +640,6 @@ where
     }
 }
 
-// TODO finish writing tests
 #[cfg(test)]
 mod test {
     use super::*;
@@ -851,10 +849,7 @@ mod test {
                 "[M\x02\x00\x30",
                 Event::Mouse(MouseEvent::Press(MouseButton::Right, 0, 16)),
             ),
-            (
-                "[M\x03\x30\x7F",
-                Event::Mouse(MouseEvent::Release(16, 95)),
-            ),
+            ("[M\x03\x30\x7F", Event::Mouse(MouseEvent::Release(16, 95))),
         ]));
 
         let item = b'\x1B';
@@ -960,11 +955,56 @@ mod test {
 
         let item = b'\x1F';
         test_parse_event(item, &mut map);
+
+        // newline
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([(
+            "",
+            Event::Key(Key::new(KeyCode::Char('\n'))),
+        )]));
+
+        let item = b'\n';
+        test_parse_event(item, &mut map);
+
+        // carriage return
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([(
+            "",
+            Event::Key(Key::new(KeyCode::Char('\n'))),
+        )]));
+
+        let item = b'\r';
+        test_parse_event(item, &mut map);
+
+        // tab
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([(
+            "",
+            Event::Key(Key::new(KeyCode::Char('\t'))),
+        )]));
+
+        let item = b'\t';
+        test_parse_event(item, &mut map);
+
+        // backspace
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([(
+            "",
+            Event::Key(Key::new(KeyCode::Backspace)),
+        )]));
+
+        let item = b'\x7F';
+        test_parse_event(item, &mut map);
+
+        // null
+        let mut map =
+            HashMap::<_, _>::from_iter(IntoIter::new([("", Event::Key(Key::new(KeyCode::Null)))]));
+
+        let item = b'\0';
+        test_parse_event(item, &mut map);
     }
 
     #[test]
     fn test_parse_non_csi_escape_codes() {
         let mut map = HashMap::<_, _>::from_iter(IntoIter::new([
+            ("OP", Event::Key(Key::new(KeyCode::F(1)))),
+            ("OS", Event::Key(Key::new(KeyCode::F(4)))),
             (
                 "O5P^",
                 Event::Key(Key::new_mod(KeyCode::F(1), KeyMod::Ctrl)),
