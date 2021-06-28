@@ -10,8 +10,17 @@ pub enum Event {
     Key(Key),
     /// A mouse button press, release or wheel use at specific coordinates.
     Mouse(MouseEvent),
+    /// Cursor position
+    //CursorPos(CursorPos),
     /// An event that cannot currently be evaluated.
     Unsupported(Vec<u8>),
+}
+
+/// A mouse related event.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum CursorPos {
+    /// The coordinates are one-based.
+    Loc(u16, u16),
 }
 
 /// A mouse related event.
@@ -290,7 +299,6 @@ fn parse_special_key_code(code: u8) -> Option<KeyCode> {
     Some(code)
 }
 
-//TODO this is dubious... can it be merged with parse_special_key_code?
 fn parse_other_special_key_code(code: u8) -> Option<KeyCode> {
     let code = match code {
         b'D' => KeyCode::Left,
@@ -344,6 +352,7 @@ where
         Some(Ok(b'F')) => Event::Key(Key::new(KeyCode::End)),
         Some(Ok(b'Z')) => Event::Key(Key::new(KeyCode::BackTab)),
         Some(Ok(b'M')) => {
+            //TODO untested
             // X10 emulation mouse encoding: ESC [ CB Cx Cy (6 characters only).
             if let (Some(cb), Some(cx), Some(cy)) =
                 (next_char(iter), next_char(iter), next_char(iter))
@@ -475,6 +484,7 @@ where
                     // rxvt mouse encoding:
                     // ESC [ Cb ; Cx ; Cy ; M
                     b'M' => {
+                        //TODO untested
                         if let Ok(str_buf) = String::from_utf8(buf) {
                             let nums = &mut str_buf.split(';');
                             if let (Some(cb), Some(cx), Some(cy)) =
@@ -571,10 +581,8 @@ where
                             }
                             return Ok(Event::Unsupported(nums));
                         }
-                        return Err(Error::new(
-                            ErrorKind::Other,
-                            "Failed to parse csi code.",
-                        ));
+                        return Err(Error::new(ErrorKind::Other, "Failed to parse special csi \
+                        code"));
                     }
                     _ => return Err(Error::new(ErrorKind::Other, "Failed to parse csi code")),
                 };
@@ -668,6 +676,66 @@ mod test {
             ("[8~", Event::Key(Key::new(KeyCode::End))),
             ("[5~", Event::Key(Key::new(KeyCode::PageUp))),
             ("[6~", Event::Key(Key::new(KeyCode::PageDown))),
+            ("[H", Event::Key(Key::new(KeyCode::Home))),
+            ("[F", Event::Key(Key::new(KeyCode::End))),
+            ("[D", Event::Key(Key::new(KeyCode::Left))),
+            ("[Z", Event::Key(Key::new(KeyCode::BackTab))),
+            (
+                "[1;2F",
+                Event::Key(Key::new_mod(KeyCode::End, KeyMod::Shift)),
+            ),
+            ("[1;3F", Event::Key(Key::new_mod(KeyCode::End, KeyMod::Alt))),
+            (
+                "[1;4F",
+                Event::Key(Key::new_mod(KeyCode::End, KeyMod::AltShift)),
+            ),
+            (
+                "[1;5F",
+                Event::Key(Key::new_mod(KeyCode::End, KeyMod::Ctrl)),
+            ),
+            (
+                "[1;6F",
+                Event::Key(Key::new_mod(KeyCode::End, KeyMod::CtrlShift)),
+            ),
+            (
+                "[1;7F",
+                Event::Key(Key::new_mod(KeyCode::End, KeyMod::AltCtrl)),
+            ),
+            (
+                "[1;8F",
+                Event::Key(Key::new_mod(KeyCode::End, KeyMod::AltCtrlShift)),
+            ),
+            (
+                "[1;2C",
+                Event::Key(Key::new_mod(KeyCode::Right, KeyMod::Shift)),
+            ),
+            (
+                "[1;3C",
+                Event::Key(Key::new_mod(KeyCode::Right, KeyMod::Alt)),
+            ),
+            (
+                "[1;4C",
+                Event::Key(Key::new_mod(KeyCode::Right, KeyMod::AltShift)),
+            ),
+            (
+                "[1;5C",
+                Event::Key(Key::new_mod(KeyCode::Right, KeyMod::Ctrl)),
+            ),
+            (
+                "[1;6C",
+                Event::Key(Key::new_mod(KeyCode::Right, KeyMod::CtrlShift)),
+            ),
+            (
+                "[1;7C",
+                Event::Key(Key::new_mod(KeyCode::Right, KeyMod::AltCtrl)),
+            ),
+            (
+                "[1;8C",
+                Event::Key(Key::new_mod(KeyCode::Right, KeyMod::AltCtrlShift)),
+            ),
+            ("[C", Event::Key(Key::new(KeyCode::Right))),
+            ("[A", Event::Key(Key::new(KeyCode::Up))),
+            ("[B", Event::Key(Key::new(KeyCode::Down))),
             (
                 "[11^",
                 Event::Key(Key::new_mod(KeyCode::F(1), KeyMod::Ctrl)),

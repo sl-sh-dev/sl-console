@@ -1,6 +1,7 @@
 use log::LevelFilter;
 use simple_logger::SimpleLogger;
 use sl_console::event::{Event, KeyCode};
+use sl_console::input::MouseTerminal;
 use sl_console::*;
 use std::io::Write;
 
@@ -13,6 +14,7 @@ fn main() {
     let mut conin = conin();
     let mut conout = conout();
     let _raw = conout.raw_mode_guard().unwrap();
+    let mut conout = MouseTerminal::from(conout);
 
     write!(
         conout,
