@@ -1,8 +1,8 @@
-use std::{io, mem};
 use std::ffi::CString;
+use std::{io, mem};
 
 use super::cvt;
-use libc::{c_ushort, ioctl, open, close, TIOCGWINSZ};
+use libc::{c_ushort, close, ioctl, open, TIOCGWINSZ};
 
 #[repr(C)]
 struct TermSize {
@@ -17,7 +17,7 @@ pub fn terminal_size() -> io::Result<(u16, u16)> {
     unsafe {
         let mut size: TermSize = mem::zeroed();
         let fd = open(f.as_ptr(), 0);
-        cvt(ioctl(fd, TIOCGWINSZ.into(), &mut size as *mut _))?;
+        cvt(ioctl(fd, TIOCGWINSZ, &mut size as *mut _))?;
         close(fd);
         Ok((size.col as u16, size.row as u16))
     }
@@ -29,7 +29,7 @@ pub fn terminal_size_pixels() -> io::Result<(u16, u16)> {
     unsafe {
         let mut size: TermSize = mem::zeroed();
         let fd = open(f.as_ptr(), 0);
-        cvt(ioctl(fd, TIOCGWINSZ.into(), &mut size as *mut _))?;
+        cvt(ioctl(fd, TIOCGWINSZ, &mut size as *mut _))?;
         close(fd);
         Ok((size.x as u16, size.y as u16))
     }
