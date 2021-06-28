@@ -562,32 +562,25 @@ where
                             "Failed to parse csi code ~ from buffer",
                         ));
                     }
-                    val
-                    @
-                    (b'D' | b'C' | b'A' | b'B' | b'H' | b'F' | b'Z' | b'P' | b'Q' | b'R'
-                    | b'S') => {
-                        if let Ok(str_buf) = String::from_utf8(buf) {
-                            let mut nums: Vec<u8> = vec![];
-                            for i in str_buf.split(';') {
-                                if let Ok(c) = i.parse::<u8>() {
-                                    nums.push(c);
+                    val => {
+                        if let Some(key_code) = parse_other_special_key_code(val) {
+                            if let Ok(str_buf) = String::from_utf8(buf) {
+                                let mut nums: Vec<u8> = vec![];
+                                for i in str_buf.split(';') {
+                                    if let Ok(c) = i.parse::<u8>() {
+                                        nums.push(c);
+                                    }
                                 }
-                            }
-                            if nums.len() == 2 {
-                                if let Some(mods) = parse_key_mods(nums[1]) {
-                                    if let Some(key_code) = parse_other_special_key_code(val) {
+                                if nums.len() == 2 {
+                                    if let Some(mods) = parse_key_mods(nums[1]) {
                                         return Ok(Event::Key(Key::new_mod(key_code, mods)));
                                     }
                                 }
+                                return Ok(Event::Unsupported(nums));
                             }
-                            return Ok(Event::Unsupported(nums));
                         }
-                        return Err(Error::new(
-                            ErrorKind::Other,
-                            "Failed to parse special csi code",
-                        ));
+                        return Err(Error::new(ErrorKind::Other, "Failed to parse csi code"));
                     }
-                    _ => return Err(Error::new(ErrorKind::Other, "Failed to parse csi code")),
                 };
             };
             return Err(Error::new(
