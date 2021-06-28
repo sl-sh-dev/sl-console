@@ -10,17 +10,8 @@ pub enum Event {
     Key(Key),
     /// A mouse button press, release or wheel use at specific coordinates.
     Mouse(MouseEvent),
-    /// Cursor position
-    //CursorPos(CursorPos),
     /// An event that cannot currently be evaluated.
     Unsupported(Vec<u8>),
-}
-
-/// A mouse related event.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum CursorPos {
-    /// The coordinates are one-based.
-    Loc(u16, u16),
 }
 
 /// A mouse related event.
@@ -331,7 +322,6 @@ fn parse_key_mods(mods: u8) -> Option<KeyMod> {
     Some(mods)
 }
 
-// TODO add cursor events to parse_csi
 /// Parses a CSI sequence, just after reading ^[
 ///
 /// Returns Result<Event, io::Error>, Event may be unsupported.
