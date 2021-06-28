@@ -56,7 +56,7 @@ pub enum MouseButton {
 /// supported:
 /// - KeyMod::AltCtrlShift and KeyCode::Char(<any>), e.g. KeyCode::Char('h')
 /// will report Key { code: Char('h), mods: KeyMod::CtrlAlt despite the
-/// shift key being pressed due to limitations
+/// shift key being pressed due to limitations in the terminal API
 /// - KeyMod::AltCtrl and KeyCode::Char(0..=9) are not supported.
 /// - KeyMod::CtrlShift and KeyCode::Char(0..=9) are not supported
 /// - Any modifier keys and Backspace/Tab are not supported, save
