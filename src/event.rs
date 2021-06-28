@@ -484,7 +484,6 @@ where
                     // rxvt mouse encoding:
                     // ESC [ Cb ; Cx ; Cy ; M
                     b'M' => {
-                        //TODO untested
                         if let Ok(str_buf) = String::from_utf8(buf) {
                             let nums = &mut str_buf.split(';');
                             if let (Some(cb), Some(cx), Some(cy)) =
@@ -855,6 +854,37 @@ mod test {
             (
                 "[M\x03\x30\x7F",
                 Event::Mouse(MouseEvent::Release(16, 95)),
+            ),
+        ]));
+
+        let item = b'\x1B';
+        test_parse_event(item, &mut map);
+    }
+
+    #[test]
+    fn test_parse_rxvt_mouse_encoding() {
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([
+            (
+                "[32;65;8;M",
+                Event::Mouse(MouseEvent::Press(MouseButton::Left, 65, 8)),
+            ),
+            (
+                "[33;5;2;M",
+                Event::Mouse(MouseEvent::Press(MouseButton::Middle, 5, 2)),
+            ),
+            (
+                "[34;65;8;M",
+                Event::Mouse(MouseEvent::Press(MouseButton::Right, 65, 8)),
+            ),
+            ("[35;65;8;M", Event::Mouse(MouseEvent::Release(65, 8))),
+            ("[64;113;234;M", Event::Mouse(MouseEvent::Hold(113, 234))),
+            (
+                "[96;65;8;M",
+                Event::Mouse(MouseEvent::Press(MouseButton::WheelUp, 65, 8)),
+            ),
+            (
+                "[97;65;8;M",
+                Event::Mouse(MouseEvent::Press(MouseButton::WheelUp, 65, 8)),
             ),
         ]));
 
