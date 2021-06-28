@@ -352,7 +352,6 @@ where
         Some(Ok(b'F')) => Event::Key(Key::new(KeyCode::End)),
         Some(Ok(b'Z')) => Event::Key(Key::new(KeyCode::BackTab)),
         Some(Ok(b'M')) => {
-            //TODO untested
             // X10 emulation mouse encoding: ESC [ CB Cx Cy (6 characters only).
             if let (Some(cb), Some(cx), Some(cy)) =
                 (next_char(iter), next_char(iter), next_char(iter))
@@ -416,6 +415,7 @@ where
                                             65 => MouseButton::WheelDown,
                                             _ => unreachable!(),
                                         };
+
                                         match c {
                                             b'M' => MouseEvent::Press(button, cx, cy),
                                             b'm' => MouseEvent::Release(cx, cy),
@@ -581,8 +581,11 @@ where
                             }
                             return Ok(Event::Unsupported(nums));
                         }
-                        return Err(Error::new(ErrorKind::Other, "Failed to parse special csi \
-                        code"));
+                        return Err(Error::new(
+                            ErrorKind::Other,
+                            "Failed to parse special csi \
+                        code",
+                        ));
                     }
                     _ => return Err(Error::new(ErrorKind::Other, "Failed to parse csi code")),
                 };
@@ -819,6 +822,39 @@ mod test {
             (
                 "[24;2~",
                 Event::Key(Key::new_mod(KeyCode::F(12), KeyMod::Shift)),
+            ),
+        ]));
+
+        let item = b'\x1B';
+        test_parse_event(item, &mut map);
+    }
+
+    #[test]
+    fn test_parse_x10_emulation_mouse_encoding() {
+        let mut map = HashMap::<_, _>::from_iter(IntoIter::new([
+            (
+                "[M\x00\x00\x00",
+                Event::Mouse(MouseEvent::Press(MouseButton::WheelUp, 0, 0)),
+            ),
+            (
+                "[M\x40\x30\x32",
+                Event::Mouse(MouseEvent::Press(MouseButton::Left, 16, 18)),
+            ),
+            (
+                "[M\x01\x00\x00",
+                Event::Mouse(MouseEvent::Press(MouseButton::WheelDown, 0, 0)),
+            ),
+            (
+                "[M\x41\x29\x30",
+                Event::Mouse(MouseEvent::Press(MouseButton::Middle, 9, 16)),
+            ),
+            (
+                "[M\x02\x00\x30",
+                Event::Mouse(MouseEvent::Press(MouseButton::Right, 0, 16)),
+            ),
+            (
+                "[M\x03\x30\x7F",
+                Event::Mouse(MouseEvent::Release(16, 95)),
             ),
         ]));
 
