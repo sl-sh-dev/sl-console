@@ -20,7 +20,7 @@ use std::time::Duration;
 use lazy_static::lazy_static;
 use parking_lot::*;
 
-use crate::event::{Event, Key};
+use crate::event::Event;
 use crate::input::event_and_raw;
 use crate::sys::console::*;
 
@@ -30,6 +30,7 @@ fn make_tty_in() -> io::Result<ReentrantMutex<RefCell<ConsoleIn>>> {
         syscon,
         leftover: None,
         blocking: true,
+        read_timeout: None,
     })))
 }
 
@@ -142,56 +143,16 @@ pub fn conout() -> Conout {
     }
 }
 
-/// RAII guard for entering raw mode, will restore previous mode when dropped.
-///
-/// The returned guard might fail to restore the raw mode when the
-/// console is being used on multiple threads.  If it can not get the
-/// locks on conin and conout on drop it will silently do nothing.  Use
-/// raw_mode_on/off directly when this might be an issue.
-pub struct RawModeGuard {
-    old_raw: bool,
-}
-
-impl Drop for RawModeGuard {
-    fn drop(&mut self) {
-        // Ignore error in drop.
-        // Also ignore if we can not get a lock on either conin or conout.
-        if let Some(mut conout) = conout().try_lock() {
-            if self.old_raw {
-                if conout.raw_mode_on().is_err() {}
-            } else if conout.raw_mode_off().is_err() {
-            }
-        }
-    }
-}
-
 /// Console output trait.
 pub trait ConsoleWrite: Write {
-    /// Switch to original (non-raw) mode
+    /// Switch the raw mode, true enters raw mode and false exits raw mode.
     ///
     /// This call needs to also lock the conin (conout will have been locked
     /// already).  If it can not lock conin it will return an error of kind
     /// WouldBlock.
-    fn raw_mode_off(&mut self) -> io::Result<()>;
-
-    /// Switch to raw mode.
-    ///
-    /// This call needs to also lock the conin (conout will have been locked
-    /// already).  If it can not lock conin it will return an error of kind
-    /// WouldBlock.
-    fn raw_mode_on(&mut self) -> io::Result<()>;
-
-    /// Switch to raw mode and return a RAII guard to switch to previous mode
-    /// when scope ends.
-    ///
-    /// This call needs to also lock the conin (conout will have been locked
-    /// already).  If it can not lock conin it will return an error of kind
-    /// WouldBlock.
-    /// The returned guard might fail to restore the raw mode when the
-    /// console is being used on multiple threads.  If it can not get the
-    /// locks on conin and conout on drop it will silently do nothing.  Use
-    /// raw_mode_on/off directly when this might be an issue.
-    fn raw_mode_guard(&mut self) -> io::Result<RawModeGuard>;
+    /// On success returns the previos raw mode value (true if was in raw mode
+    /// before call).
+    fn set_raw_mode(&mut self, mode: bool) -> io::Result<bool>;
 
     /// True if in raw mode.
     fn is_raw_mode(&self) -> bool;
@@ -199,31 +160,14 @@ pub trait ConsoleWrite: Write {
 
 /// Console input trait.
 pub trait ConsoleRead: Read {
-    /// Set whether the console is blocking or non-blocking.
-    ///
-    /// Default is blocking.  If non blocking then the get_* functions can
-    /// return WouldBlock errors if no data is ready.  The poll functions
-    /// will work whether in blocking or non blocking mode.
-    fn set_blocking(&mut self, blocking: bool);
-
-    /// Is this console blocking or non-blocking?
-    fn is_blocking(&self) -> bool;
-
-    /// Get the next input event from the tty and the bytes that define it.
-    ///
-    /// If the tty is non-blocking then can return a WouldBlock error.
-    fn get_event_and_raw(&mut self) -> io::Result<(Event, Vec<u8>)>;
-
-    /// Get the next input event from the tty.
-    ///
-    /// If the tty is non-blocking then can return a WouldBlock error.
-    fn get_event(&mut self) -> io::Result<Event>;
-
-    /// Get the next key event from the tty.
-    ///
-    /// This will skip over non-key events (they will be lost).
-    /// If the tty is non-blocking then can return a WouldBlock error.
-    fn get_key(&mut self) -> io::Result<Key>;
+    /// Get the next input event from the console and the bytes that define it.
+    /// If timeout is not None then will return a WouldBlock error after timeout
+    /// if no input.
+    /// Returns None if the Console has no more data vs a read that would block.
+    fn get_event_and_raw(
+        &mut self,
+        timeout: Option<Duration>,
+    ) -> Option<io::Result<(Event, Vec<u8>)>>;
 
     /// Return when more data is avialable.
     ///
@@ -269,24 +213,11 @@ impl Conin {
 }
 
 impl ConsoleRead for Conin {
-    fn set_blocking(&mut self, blocking: bool) {
-        self.lock().set_blocking(blocking);
-    }
-
-    fn is_blocking(&self) -> bool {
-        self.lock().is_blocking()
-    }
-
-    fn get_event_and_raw(&mut self) -> io::Result<(Event, Vec<u8>)> {
-        self.lock().get_event_and_raw()
-    }
-
-    fn get_event(&mut self) -> io::Result<Event> {
-        self.lock().get_event()
-    }
-
-    fn get_key(&mut self) -> io::Result<Key> {
-        self.lock().get_key()
+    fn get_event_and_raw(
+        &mut self,
+        timeout: Option<Duration>,
+    ) -> Option<io::Result<(Event, Vec<u8>)>> {
+        self.lock().get_event_and_raw(timeout)
     }
 
     fn poll(&mut self) {
@@ -335,16 +266,8 @@ impl Conout {
 }
 
 impl ConsoleWrite for Conout {
-    fn raw_mode_off(&mut self) -> io::Result<()> {
-        self.lock().raw_mode_off()
-    }
-
-    fn raw_mode_on(&mut self) -> io::Result<()> {
-        self.lock().raw_mode_on()
-    }
-
-    fn raw_mode_guard(&mut self) -> io::Result<RawModeGuard> {
-        self.lock().raw_mode_guard()
+    fn set_raw_mode(&mut self, mode: bool) -> io::Result<bool> {
+        self.lock().set_raw_mode(mode)
     }
 
     fn is_raw_mode(&self) -> bool {
@@ -371,6 +294,7 @@ pub struct ConsoleIn {
     syscon: SysConsoleIn,
     leftover: Option<u8>,
     blocking: bool,
+    read_timeout: Option<Duration>,
 }
 
 /// A locked console input device.
@@ -394,43 +318,24 @@ pub struct ConsoleOutLock<'a> {
 }
 
 impl ConsoleRead for ConsoleIn {
-    fn set_blocking(&mut self, blocking: bool) {
-        self.blocking = blocking;
-    }
-
-    fn is_blocking(&self) -> bool {
-        self.blocking
-    }
-
-    fn get_event_and_raw(&mut self) -> io::Result<(Event, Vec<u8>)> {
-        let mut leftover = self.leftover.take();
-        if let Some(er) = event_and_raw(self, &mut leftover) {
-            self.leftover = leftover;
-            er
+    fn get_event_and_raw(
+        &mut self,
+        timeout: Option<Duration>,
+    ) -> Option<io::Result<(Event, Vec<u8>)>> {
+        let old_block = self.blocking;
+        let old_timeout = self.read_timeout.take();
+        if timeout.is_none() {
+            self.blocking = true;
         } else {
-            self.leftover = leftover;
-            Err(io::Error::new(
-                io::ErrorKind::WouldBlock,
-                "Event stream would block",
-            ))
+            self.blocking = false;
+            self.read_timeout = timeout;
         }
-    }
-
-    fn get_event(&mut self) -> io::Result<Event> {
-        match self.get_event_and_raw() {
-            Ok((event, _raw)) => Ok(event),
-            Err(err) => Err(err),
-        }
-    }
-
-    fn get_key(&mut self) -> io::Result<Key> {
-        loop {
-            match self.get_event() {
-                Ok(Event::Key(k)) => return Ok(k),
-                Ok(_) => continue,
-                Err(e) => return Err(e),
-            }
-        }
+        let mut leftover = self.leftover.take();
+        let mut guard = scopeguard::guard(self, |s| {
+            s.blocking = old_block;
+            s.read_timeout = old_timeout;
+        });
+        event_and_raw(&mut *guard, &mut leftover)
     }
 
     fn poll(&mut self) {
@@ -447,30 +352,32 @@ impl Read for ConsoleIn {
         if self.blocking {
             self.syscon.read_block(buf)
         } else {
-            self.syscon.read(buf)
+            let mut do_read = true;
+            if let Some(timeout) = self.read_timeout {
+                do_read = self.poll_timeout(timeout);
+            }
+            if do_read {
+                // Assume we may be reading an CSI or something so allow a small
+                // window for more data.
+                self.read_timeout = Some(Duration::from_millis(10));
+                self.syscon.read(buf)
+            } else {
+                self.read_timeout = None;
+                Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "Timed out on console read.",
+                ))
+            }
         }
     }
 }
 
 impl<'a> ConsoleRead for ConsoleInLock<'a> {
-    fn set_blocking(&mut self, blocking: bool) {
-        self.inner.borrow_mut().blocking = blocking;
-    }
-
-    fn is_blocking(&self) -> bool {
-        self.inner.borrow().blocking
-    }
-
-    fn get_event_and_raw(&mut self) -> io::Result<(Event, Vec<u8>)> {
-        self.inner.borrow_mut().get_event_and_raw()
-    }
-
-    fn get_event(&mut self) -> io::Result<Event> {
-        self.inner.borrow_mut().get_event()
-    }
-
-    fn get_key(&mut self) -> io::Result<Key> {
-        self.inner.borrow_mut().get_key()
+    fn get_event_and_raw(
+        &mut self,
+        timeout: Option<Duration>,
+    ) -> Option<io::Result<(Event, Vec<u8>)>> {
+        self.inner.borrow_mut().get_event_and_raw(timeout)
     }
 
     fn poll(&mut self) {
@@ -489,12 +396,18 @@ impl<'a> Read for ConsoleInLock<'a> {
 }
 
 impl ConsoleWrite for ConsoleOut {
-    fn raw_mode_off(&mut self) -> io::Result<()> {
-        if self.raw_mode {
+    fn set_raw_mode(&mut self, mode: bool) -> io::Result<bool> {
+        let prev_mode = self.raw_mode;
+        if self.raw_mode != mode {
             if let Some(conin) = conin_r()?.try_lock() {
-                self.syscon.suspend_raw_mode(&conin.inner.borrow().syscon)?;
-                self.raw_mode = false;
-                Ok(())
+                if mode {
+                    self.syscon
+                        .activate_raw_mode(&conin.inner.borrow().syscon)?;
+                } else {
+                    self.syscon.suspend_raw_mode(&conin.inner.borrow().syscon)?;
+                }
+                self.raw_mode = mode;
+                Ok(prev_mode)
             } else {
                 Err(io::Error::new(
                     io::ErrorKind::WouldBlock,
@@ -502,32 +415,8 @@ impl ConsoleWrite for ConsoleOut {
                 ))
             }
         } else {
-            Ok(())
+            Ok(prev_mode)
         }
-    }
-
-    fn raw_mode_on(&mut self) -> io::Result<()> {
-        if !self.raw_mode {
-            if let Some(conin) = conin_r()?.try_lock() {
-                self.syscon
-                    .activate_raw_mode(&conin.inner.borrow().syscon)?;
-                self.raw_mode = true;
-                Ok(())
-            } else {
-                Err(io::Error::new(
-                    io::ErrorKind::WouldBlock,
-                    "Conin is already locked.",
-                ))
-            }
-        } else {
-            Ok(())
-        }
-    }
-
-    fn raw_mode_guard(&mut self) -> io::Result<RawModeGuard> {
-        let old_raw = self.raw_mode;
-        self.raw_mode_on()?;
-        Ok(RawModeGuard { old_raw })
     }
 
     fn is_raw_mode(&self) -> bool {
@@ -546,16 +435,8 @@ impl Write for ConsoleOut {
 }
 
 impl<'a> ConsoleWrite for ConsoleOutLock<'a> {
-    fn raw_mode_off(&mut self) -> io::Result<()> {
-        self.inner.borrow_mut().raw_mode_off()
-    }
-
-    fn raw_mode_on(&mut self) -> io::Result<()> {
-        self.inner.borrow_mut().raw_mode_on()
-    }
-
-    fn raw_mode_guard(&mut self) -> io::Result<RawModeGuard> {
-        self.inner.borrow_mut().raw_mode_guard()
+    fn set_raw_mode(&mut self, mode: bool) -> io::Result<bool> {
+        self.inner.borrow_mut().set_raw_mode(mode)
     }
 
     fn is_raw_mode(&self) -> bool {
@@ -570,19 +451,6 @@ impl<'a> Write for ConsoleOutLock<'a> {
 
     fn flush(&mut self) -> io::Result<()> {
         self.inner.borrow_mut().flush()
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use std::io::Read;
-
-    #[test]
-    fn test_async_stdin() {
-        let mut tty = conin_r().unwrap();
-        tty.set_blocking(false);
-        tty.bytes().next();
     }
 }
 
@@ -660,6 +528,21 @@ mod windows_impl {
     impl<'a> AsRawHandle for ConsoleOutLock<'a> {
         fn as_raw_handle(&self) -> RawHandle {
             self.inner.borrow_mut().as_raw_handle()
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_async_stdin() {
+        let mut tty = conin_r().unwrap();
+        if let Some(Err(err)) = tty.get_event_and_raw(Some(Duration::from_millis(10))) {
+            assert!(err.kind() == io::ErrorKind::WouldBlock);
+        } else {
+            panic!("Should have returned WouldBlock!");
         }
     }
 }

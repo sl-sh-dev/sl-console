@@ -7,8 +7,7 @@ use std::io::Write;
 fn main() {
     con_init().unwrap();
 
-    let mut console = conout();
-    let _raw = console.raw_mode_guard().unwrap();
+    let console = conout().into_raw_mode().unwrap();
     let mut console = MouseTerminal::from(console);
 
     writeln!(
@@ -20,8 +19,8 @@ fn main() {
     .unwrap();
 
     let mut conin = conin();
-    loop {
-        let c = conin.get_event();
+    for c in conin.lock().events() {
+        //let c = conin.get_event();
         let evt = c.unwrap();
         match evt {
             Event::Key(key) => match key.code {

@@ -2,42 +2,47 @@
 
 use std::io::{self, Read, Write};
 use std::ops;
+use std::time::Duration;
 
-use crate::console::ConsoleWrite;
+use crate::console::{ConsoleRead, ConsoleWrite};
 use crate::event::{self, Event, Key, KeyCode};
+
+/// An iterator over input events.
+pub struct EventsAndRaw<R> {
+    inner: R,
+}
+
+impl<R: ConsoleRead> Iterator for EventsAndRaw<R> {
+    type Item = Result<(Event, Vec<u8>), io::Error>;
+
+    fn next(&mut self) -> Option<Result<(Event, Vec<u8>), io::Error>> {
+        self.inner.get_event_and_raw(None)
+    }
+}
 
 /// An iterator over input keys.
 pub struct Keys<R> {
-    iter: Events<R>,
+    inner: R,
 }
 
-impl<R: Read> Iterator for Keys<R> {
+impl<R: ConsoleRead> Iterator for Keys<R> {
     type Item = Result<Key, io::Error>;
 
     fn next(&mut self) -> Option<Result<Key, io::Error>> {
-        loop {
-            match self.iter.next() {
-                Some(Ok(Event::Key(k))) => return Some(Ok(k)),
-                Some(Ok(_)) => continue,
-                Some(Err(e)) => return Some(Err(e)),
-                None => return None,
-            };
-        }
+        self.inner.get_key()
     }
 }
 
 /// An iterator over input events.
 pub struct Events<R> {
-    inner: EventsAndRaw<R>,
+    inner: R,
 }
 
-impl<R: Read> Iterator for Events<R> {
+impl<R: ConsoleRead> Iterator for Events<R> {
     type Item = Result<Event, io::Error>;
 
     fn next(&mut self) -> Option<Result<Event, io::Error>> {
-        self.inner
-            .next()
-            .map(|tuple| tuple.map(|(event, _raw)| event))
+        self.inner.get_event()
     }
 }
 
@@ -81,20 +86,6 @@ pub(crate) fn event_and_raw(
     Some(res)
 }
 
-/// An iterator over input events and the bytes that define them.
-pub struct EventsAndRaw<R> {
-    source: R,
-    leftover: Option<u8>,
-}
-
-impl<R: Read> Iterator for EventsAndRaw<R> {
-    type Item = Result<(Event, Vec<u8>), io::Error>;
-
-    fn next(&mut self) -> Option<Result<(Event, Vec<u8>), io::Error>> {
-        event_and_raw(&mut self.source, &mut self.leftover)
-    }
-}
-
 fn parse_event<I>(item: u8, iter: &mut I) -> io::Result<(Event, Vec<u8>)>
 where
     I: Iterator<Item = io::Result<u8>>,
@@ -113,9 +104,9 @@ where
         .map(|e| (e, buf))
 }
 
-/// Extension to `Read` trait.
-pub trait TermRead {
-    /// An iterator over input events and the bytes that define them.
+/// Extension to `ConsoleRead` trait.
+pub trait ConsoleReadExt {
+    /// An iterator over input events and the raw bytes that make them.
     fn events_and_raw(self) -> EventsAndRaw<Self>
     where
         Self: Sized;
@@ -130,49 +121,63 @@ pub trait TermRead {
     where
         Self: Sized;
 
-    /// Read a line.
+    /// Get the next input event from the console.
+    /// This version will block until an event is ready.
+    /// Returns None if the Console has no more data vs a read that would block.
+    fn get_event(&mut self) -> Option<io::Result<Event>>;
+
+    /// Get the next input event from the console.
     ///
-    /// EOT and ETX will abort the prompt, returning `None`. Newline or carriage return will
-    /// complete the input.
-    fn read_line(&mut self) -> io::Result<Option<String>>;
+    /// If no data is ready before timeout then will return a WouldBlock error.
+    /// Returns None if the Console has no more data vs a read that would block.
+    fn get_event_timeout(&mut self, timeout: Duration) -> Option<io::Result<Event>>;
+
+    /// Get the next key event from the console.
+    ///
+    /// This will skip over non-key events (they will be lost).
+    /// This version will block until an event is ready.
+    /// Returns None if the Console has no more data.
+    fn get_key(&mut self) -> Option<io::Result<Key>>;
 }
 
-impl<R: Read> TermRead for R {
+impl<R: ConsoleRead> ConsoleReadExt for R {
     fn events_and_raw(self) -> EventsAndRaw<Self> {
-        EventsAndRaw {
-            source: self,
-            leftover: None,
-        }
+        EventsAndRaw { inner: self }
     }
+
     fn events(self) -> Events<Self> {
-        Events {
-            inner: self.events_and_raw(),
-        }
+        Events { inner: self }
     }
+
     fn keys(self) -> Keys<Self> {
-        Keys {
-            iter: self.events(),
+        Keys { inner: self }
+    }
+
+    fn get_event(&mut self) -> Option<io::Result<Event>> {
+        match self.get_event_and_raw(None) {
+            Some(Ok((event, _raw))) => Some(Ok(event)),
+            Some(Err(err)) => Some(Err(err)),
+            None => None,
         }
     }
 
-    fn read_line(&mut self) -> io::Result<Option<String>> {
-        let mut buf = Vec::with_capacity(30);
+    fn get_event_timeout(&mut self, timeout: Duration) -> Option<io::Result<Event>> {
+        match self.get_event_and_raw(Some(timeout)) {
+            Some(Ok((event, _raw))) => Some(Ok(event)),
+            Some(Err(err)) => Some(Err(err)),
+            None => None,
+        }
+    }
 
-        for c in self.bytes() {
-            match c {
-                Err(e) => return Err(e),
-                Ok(0) | Ok(3) | Ok(4) => return Ok(None),
-                Ok(0x7f) => {
-                    buf.pop();
-                }
-                Ok(b'\n') | Ok(b'\r') => break,
-                Ok(c) => buf.push(c),
+    fn get_key(&mut self) -> Option<io::Result<Key>> {
+        loop {
+            match self.get_event() {
+                Some(Ok(Event::Key(k))) => return Some(Ok(k)),
+                Some(Ok(_)) => continue,
+                Some(Err(e)) => return Some(Err(e)),
+                None => return None,
             }
         }
-
-        let string =
-            String::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        Ok(Some(string))
     }
 }
 
@@ -250,16 +255,8 @@ impl<W: ConsoleWrite> Write for MouseTerminal<W> {
 }
 
 impl<W: ConsoleWrite> ConsoleWrite for MouseTerminal<W> {
-    fn raw_mode_off(&mut self) -> io::Result<()> {
-        self.term.raw_mode_off()
-    }
-
-    fn raw_mode_on(&mut self) -> io::Result<()> {
-        self.term.raw_mode_on()
-    }
-
-    fn raw_mode_guard(&mut self) -> io::Result<crate::console::RawModeGuard> {
-        self.term.raw_mode_guard()
+    fn set_raw_mode(&mut self, mode: bool) -> io::Result<bool> {
+        self.term.set_raw_mode(mode)
     }
 
     fn is_raw_mode(&self) -> bool {
@@ -271,6 +268,24 @@ impl<W: ConsoleWrite> ConsoleWrite for MouseTerminal<W> {
 mod test {
     use super::*;
     use event::{Event, Key, KeyCode, KeyMod, MouseButton, MouseEvent};
+    use std::cell::RefCell;
+
+    thread_local!(static LEFTOVER: RefCell<Option<u8>> = RefCell::new(None));
+
+    impl ConsoleRead for &[u8] {
+        fn get_event_and_raw(
+            &mut self,
+            _timeout: Option<Duration>,
+        ) -> Option<io::Result<(Event, Vec<u8>)>> {
+            LEFTOVER.with(|leftover| event_and_raw(self, &mut leftover.borrow_mut()))
+        }
+
+        fn poll(&mut self) {}
+
+        fn poll_timeout(&mut self, _timeout: Duration) -> bool {
+            self.len() > 0
+        }
+    }
 
     #[test]
     fn test_keys() {
@@ -417,57 +432,5 @@ mod test {
         let mut st = b"\x1B".keys();
         assert_eq!(st.next().unwrap().unwrap(), Key::new(KeyCode::Esc));
         assert!(st.next().is_none());
-    }
-
-    fn line_match(a: &str, b: Option<&str>) {
-        let line = a.as_bytes().read_line().unwrap();
-        let pass = a.as_bytes().read_line().unwrap();
-
-        assert_eq!(line, pass);
-
-        if let Some(l) = line {
-            assert_eq!(Some(l.as_str()), b);
-        } else {
-            assert!(b.is_none());
-        }
-    }
-
-    #[test]
-    fn test_read() {
-        let test1 = "this is the first test";
-        let test2 = "this is the second test";
-
-        line_match(test1, Some(test1));
-        line_match(test2, Some(test2));
-    }
-
-    #[test]
-    fn test_backspace() {
-        line_match(
-            "this is the\x7f first\x7f\x7f test",
-            Some("this is th fir test"),
-        );
-        line_match(
-            "this is the seco\x7fnd test\x7f",
-            Some("this is the secnd tes"),
-        );
-    }
-
-    #[test]
-    fn test_end() {
-        line_match(
-            "abc\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            Some("abc"),
-        );
-        line_match(
-            "hello\rhttps://www.youtube.com/watch?v=yPYZpwSpKmA",
-            Some("hello"),
-        );
-    }
-
-    #[test]
-    fn test_abort() {
-        line_match("abc\x03https://www.youtube.com/watch?v=dQw4w9WgXcQ", None);
-        line_match("hello\x04https://www.youtube.com/watch?v=yPYZpwSpKmA", None);
     }
 }

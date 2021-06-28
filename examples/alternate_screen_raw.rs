@@ -1,5 +1,5 @@
 use sl_console::event::KeyCode;
-use sl_console::input::TermRead;
+use sl_console::input::ConsoleReadExt;
 use sl_console::screen::*;
 use sl_console::*;
 use std::io::Write;
@@ -15,7 +15,7 @@ fn write_alt_screen_msg<W: Write>(screen: &mut W) {
 fn main() {
     con_init().unwrap();
     let stdin = conin();
-    let _raw = conout().raw_mode_guard().unwrap();
+    let _raw = conout().into_raw_mode().unwrap();
     let mut screen = AlternateScreen::from(conout());
     write!(screen, "{}", sl_console::cursor::Hide).unwrap();
     write_alt_screen_msg(&mut screen);

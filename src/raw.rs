@@ -12,39 +12,36 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use sl_console::raw::IntoRawMode;
-//! use std::io::{Write, stdout};
+//! use sl_console::*;
+//! use std::io::Write;
 //!
-//!     let mut stdout = stdout().into_raw_mode().unwrap();
+//!     let mut conout = conout().into_raw_mode().unwrap();
 //!
-//!     write!(stdout, "Hey there.").unwrap();
+//!     write!(conout, "Hey there.").unwrap();
 //! ```
 
 use std::io::{self, Write};
 use std::ops;
 
-use crate::sys::attr::{get_terminal_attr_fd, raw_terminal_attr, set_terminal_attr_fd};
-use crate::sys::Termios;
-
-/// The timeout of an escape code control sequence, in milliseconds.
-pub const CONTROL_SEQUENCE_TIMEOUT: u64 = 100;
+use crate::console::*;
 
 /// A terminal restorer, which keeps the previous state of the terminal, and restores it, when
 /// dropped.
 ///
 /// Restoring will entirely bring back the old TTY state.
-pub struct RawTerminal<W: Write> {
-    prev_ios: Termios,
+pub struct RawTerminal<W: ConsoleWrite> {
+    prev_mode: bool,
     output: W,
 }
 
-impl<W: Write> Drop for RawTerminal<W> {
+impl<W: ConsoleWrite> Drop for RawTerminal<W> {
     fn drop(&mut self) {
-        set_terminal_attr(&self.prev_ios).unwrap();
+        // Ignore error in drop...
+        if self.output.set_raw_mode(self.prev_mode).is_err() {}
     }
 }
 
-impl<W: Write> ops::Deref for RawTerminal<W> {
+impl<W: ConsoleWrite> ops::Deref for RawTerminal<W> {
     type Target = W;
 
     fn deref(&self) -> &W {
@@ -52,13 +49,23 @@ impl<W: Write> ops::Deref for RawTerminal<W> {
     }
 }
 
-impl<W: Write> ops::DerefMut for RawTerminal<W> {
+impl<W: ConsoleWrite> ops::DerefMut for RawTerminal<W> {
     fn deref_mut(&mut self) -> &mut W {
         &mut self.output
     }
 }
 
-impl<W: Write> Write for RawTerminal<W> {
+impl<W: ConsoleWrite> ConsoleWrite for RawTerminal<W> {
+    fn set_raw_mode(&mut self, mode: bool) -> io::Result<bool> {
+        self.output.set_raw_mode(mode)
+    }
+
+    fn is_raw_mode(&self) -> bool {
+        self.output.is_raw_mode()
+    }
+}
+
+impl<W: ConsoleWrite> Write for RawTerminal<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.output.write(buf)
     }
@@ -73,9 +80,21 @@ mod unix_impl {
     use super::*;
     use std::os::unix::io::{AsRawFd, RawFd};
 
-    impl<W: Write + AsRawFd> AsRawFd for RawTerminal<W> {
+    impl<W: ConsoleWrite + AsRawFd> AsRawFd for RawTerminal<W> {
         fn as_raw_fd(&self) -> RawFd {
             self.output.as_raw_fd()
+        }
+    }
+}
+
+#[cfg(windows)]
+mod windows_impl {
+    use super::*;
+    use std::os::windows::io::{AsRawHandle, RawHandle};
+
+    impl<W: ConsoleWrite + AsRawHandle> AsRawHandle for RawTerminal<W> {
+        fn as_raw_handle(&self) -> RawHandle {
+            self.output.as_raw_handle()
         }
     }
 }
@@ -86,7 +105,21 @@ mod unix_impl {
 ///
 /// TTYs has their state controlled by the writer, not the reader. You use the writer to clear the
 /// screen, move the cursor and so on, so naturally you use the writer to change the mode as well.
-pub trait IntoRawMode: Write + Sized {
+pub trait RawModeExt: ConsoleWrite + Sized {
+    /// Switch to original (non-raw) mode
+    ///
+    /// This call needs to also lock the conin (conout will have been locked
+    /// already).  If it can not lock conin it will return an error of kind
+    /// WouldBlock.
+    fn raw_mode_off(&mut self) -> io::Result<()>;
+
+    /// Switch to raw mode.
+    ///
+    /// This call needs to also lock the conin (conout will have been locked
+    /// already).  If it can not lock conin it will return an error of kind
+    /// WouldBlock.
+    fn raw_mode_on(&mut self) -> io::Result<()>;
+
     /// Switch to raw mode.
     ///
     /// Raw mode means that stdin won't be printed (it will instead have to be written manually by
@@ -95,34 +128,37 @@ pub trait IntoRawMode: Write + Sized {
     fn into_raw_mode(self) -> io::Result<RawTerminal<Self>>;
 }
 
-impl<W: Write> IntoRawMode for W {
-    fn into_raw_mode(self) -> io::Result<RawTerminal<W>> {
-        let mut ios = get_terminal_attr()?;
-        let prev_ios = ios;
+impl<W: ConsoleWrite> RawModeExt for W {
+    fn raw_mode_off(&mut self) -> io::Result<()> {
+        self.set_raw_mode(false)?;
+        Ok(())
+    }
 
-        raw_terminal_attr(&mut ios);
+    fn raw_mode_on(&mut self) -> io::Result<()> {
+        self.set_raw_mode(true)?;
+        Ok(())
+    }
 
-        set_terminal_attr(&ios)?;
+    fn into_raw_mode(mut self) -> io::Result<RawTerminal<W>> {
+        let prev_mode = self.set_raw_mode(true)?;
 
         Ok(RawTerminal {
-            prev_ios,
+            prev_mode,
             output: self,
         })
     }
 }
 
-impl<W: Write> RawTerminal<W> {
+impl<W: ConsoleWrite> RawTerminal<W> {
     /// Temporarily switch to original mode
-    pub fn suspend_raw_mode(&self) -> io::Result<()> {
-        set_terminal_attr(&self.prev_ios)?;
+    pub fn suspend_raw_mode(&mut self) -> io::Result<()> {
+        self.output.set_raw_mode(false)?;
         Ok(())
     }
 
     /// Temporarily switch to raw mode
-    pub fn activate_raw_mode(&self) -> io::Result<()> {
-        let mut ios = get_terminal_attr()?;
-        raw_terminal_attr(&mut ios);
-        set_terminal_attr(&ios)?;
+    pub fn activate_raw_mode(&mut self) -> io::Result<()> {
+        self.output.set_raw_mode(true)?;
         Ok(())
     }
 }
@@ -130,11 +166,13 @@ impl<W: Write> RawTerminal<W> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::io::{stdout, Write};
+    use std::io::Write;
 
     #[test]
     fn test_into_raw_mode() {
-        let mut out = stdout().into_raw_mode().unwrap();
+        // Need this lock because tests are multi-threaded.
+        let _conin = conin().lock();
+        let mut out = conout().into_raw_mode().unwrap();
 
         out.write_all(b"this is a test, muahhahahah\r\n").unwrap();
 

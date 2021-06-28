@@ -337,7 +337,7 @@ impl<R: ConsoleRead, W: Write> Game<R, W> {
     fn start(&mut self) -> bool {
         loop {
             // Read an event and ignore an error.
-            let event = if let Ok(e) = self.conin.get_event() {
+            let event = if let Some(Ok(e)) = self.conin.get_event() {
                 e
             } else {
                 continue;
@@ -608,7 +608,7 @@ impl<R: ConsoleRead, W: Write> Game<R, W> {
             // Repeatedly read a single key.
             let key = self.conin.get_key();
             match key {
-                Ok(key) => {
+                Some(Ok(key)) => {
                     match key.code {
                         KeyCode::Char('r') => {
                             // Replay!

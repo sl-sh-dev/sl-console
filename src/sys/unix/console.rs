@@ -1,6 +1,6 @@
 //! Support access to the tty/console.
 
-use libc::{self, fd_set, suseconds_t, timeval};
+use libc::{self, fd_set, suseconds_t, time_t, timeval};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
@@ -104,14 +104,9 @@ impl SysConsoleIn {
             libc::FD_ZERO(&mut rfdset);
             libc::FD_SET(tty_fd, &mut rfdset);
         }
-        let timeout_us = if timeout.as_micros() < suseconds_t::MAX as u128 {
-            timeout.as_micros() as suseconds_t
-        } else {
-            suseconds_t::MAX
-        };
         let mut tv = timeval {
-            tv_sec: 0,
-            tv_usec: timeout_us,
+            tv_sec: timeout.as_secs() as time_t,
+            tv_usec: timeout.subsec_micros() as suseconds_t,
         };
         unsafe {
             libc::select(

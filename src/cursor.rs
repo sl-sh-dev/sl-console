@@ -166,74 +166,69 @@ pub trait CursorPos {
 
 impl<C: ConsoleRead> CursorPos for C {
     fn cursor_pos(&mut self) -> io::Result<(u16, u16)> {
-        fn cursor_pos_inner(conin: &mut dyn ConsoleRead) -> io::Result<(u16, u16)> {
-            let delimiter = b'R';
+        let delimiter = b'R';
 
-            let mut conout = conout_r()?;
-            // Where is the cursor?
-            // Use `ESC [ 6 n`.
-            write!(conout, "\x1B[6n")?;
-            conout.flush()?;
+        let mut conout = conout_r()?;
+        // Where is the cursor?
+        // Use `ESC [ 6 n`.
+        write!(conout, "\x1B[6n")?;
+        conout.flush()?;
 
-            let mut buf: [u8; 1] = [0];
-            let mut read_chars = Vec::new();
+        let mut buf: [u8; 1] = [0];
+        let mut read_chars = Vec::new();
 
-            let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT / 2);
-            let mut retry = true;
-            if conin.poll_timeout(timeout) {
-                while buf[0] != delimiter {
-                    match conin.read(&mut buf) {
-                        Ok(b) if b > 0 => {
-                            read_chars.push(buf[0]);
-                        }
-                        Ok(_) => {}
-                        Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
-                            // Don't error out on a would block- this just means no response since async.
-                            if retry {
-                                // read finishes and no data was returned, since this
-                                // is the first time, call poll_timeout once more to allow another
-                                // call to read.
-                                conin.poll_timeout(timeout);
-                                retry = false;
-                            } else {
-                                // if this is the second time read has finished, signal termination.
-                                buf[0] = delimiter;
-                            }
-                        }
-                        Err(err) => return Err(err),
+        let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT / 2);
+        let mut retry = true;
+        // XXX This is potentially broken but Price is going to read this as events so going
+        // away soon.
+        if self.poll_timeout(timeout) {
+            while buf[0] != delimiter {
+                match self.read(&mut buf) {
+                    Ok(b) if b > 0 => {
+                        read_chars.push(buf[0]);
                     }
-                }
-            }
-
-            if !read_chars.is_empty() {
-                // The answer will look like `ESC [ Cy ; Cx R`.
-                read_chars.pop(); // remove trailing R.
-                if let Ok(read_str) = String::from_utf8(read_chars) {
-                    if let Some(beg) = read_str.rfind('[') {
-                        let coords: String = read_str.chars().skip(beg + 1).collect();
-                        let mut nums = coords.split(';');
-                        if let (Some(cy), Some(cx)) = (nums.next(), nums.next()) {
-                            if let (Ok(cy), Ok(cx)) = (cy.parse::<u16>(), cx.parse::<u16>()) {
-                                return Ok((cx, cy));
-                            }
+                    Ok(_) => {}
+                    Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
+                        // Don't error out on a would block- this just means no response since async.
+                        if retry {
+                            // read finishes and no data was returned, since this
+                            // is the first time, call poll_timeout once more to allow another
+                            // call to read.
+                            self.poll_timeout(timeout);
+                            retry = false;
+                        } else {
+                            // if this is the second time read has finished, signal termination.
+                            buf[0] = delimiter;
                         }
                     }
+                    Err(err) => return Err(err),
                 }
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    "Failed to parse coords from chars read from console.",
-                ));
             }
-            Err(Error::new(
-                ErrorKind::Other,
-                "Cursor position detection timed out.",
-            ))
         }
-        let old_blocking = self.is_blocking();
-        self.set_blocking(false);
-        let res = cursor_pos_inner(self);
-        self.set_blocking(old_blocking);
-        res
+
+        if !read_chars.is_empty() {
+            // The answer will look like `ESC [ Cy ; Cx R`.
+            read_chars.pop(); // remove trailing R.
+            if let Ok(read_str) = String::from_utf8(read_chars) {
+                if let Some(beg) = read_str.rfind('[') {
+                    let coords: String = read_str.chars().skip(beg + 1).collect();
+                    let mut nums = coords.split(';');
+                    if let (Some(cy), Some(cx)) = (nums.next(), nums.next()) {
+                        if let (Ok(cy), Ok(cx)) = (cy.parse::<u16>(), cx.parse::<u16>()) {
+                            return Ok((cx, cy));
+                        }
+                    }
+                }
+            }
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Failed to parse coords from chars read from console.",
+            ));
+        }
+        Err(Error::new(
+            ErrorKind::Other,
+            "Cursor position detection timed out.",
+        ))
     }
 }
 
