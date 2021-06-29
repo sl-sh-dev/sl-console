@@ -36,7 +36,7 @@ fn main() {
         .unwrap();
         let evt = c.unwrap();
         match evt {
-            Event::Key(key) => match (key.clone().code, key.clone().mods) {
+            Event::Key(key) => match (key.code, key.mods) {
                 (KeyCode::Char('q'), None) => break,
                 _ => {
                     log::info!("Key: {:?}.", key);

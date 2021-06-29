@@ -50,7 +50,7 @@ pub enum MouseButton {
     WheelDown,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 /// Struct representing a Key composed of a KeyCode and KeyMod
 /// Note that certain KeyCode + KeyMod combinations are not
 /// supported:
@@ -135,7 +135,7 @@ pub enum KeyCode {
 }
 
 /// Key combinations for keys besides Alt(char) and Ctrl(char) in
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum KeyMod {
     /// Alt modifier key
     Alt,

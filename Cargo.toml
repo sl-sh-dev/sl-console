@@ -1,6 +1,6 @@
 [package]
 name = "sl-console"
-version = "0.10.0"
+version = "0.10.1"
 authors = [
     "ticki <Ticki@users.noreply.github.com>",
     "gycos <alexandre.bury@gmail.com>",
