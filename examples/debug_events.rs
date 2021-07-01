@@ -12,8 +12,7 @@ fn main() {
         .init()
         .unwrap();
     let mut conin = conin();
-    let mut conout = conout();
-    let _raw = conout.raw_mode_guard().unwrap();
+    let conout = conout().into_raw_mode().unwrap();
     let mut conout = MouseTerminal::from(conout);
 
     write!(
@@ -34,7 +33,7 @@ fn main() {
             sl_console::clear::UntilNewline,
         )
         .unwrap();
-        let evt = c.unwrap();
+        let evt = c.unwrap().unwrap();
         match evt {
             Event::Key(key) => match (key.code, key.mods) {
                 (KeyCode::Char('q'), None) => break,

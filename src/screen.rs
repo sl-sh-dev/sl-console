@@ -92,16 +92,8 @@ impl<W: ConsoleWrite> Write for AlternateScreen<W> {
 }
 
 impl<W: ConsoleWrite> ConsoleWrite for AlternateScreen<W> {
-    fn raw_mode_off(&mut self) -> io::Result<()> {
-        self.output.raw_mode_off()
-    }
-
-    fn raw_mode_on(&mut self) -> io::Result<()> {
-        self.output.raw_mode_on()
-    }
-
-    fn raw_mode_guard(&mut self) -> io::Result<crate::console::RawModeGuard> {
-        self.output.raw_mode_guard()
+    fn set_raw_mode(&mut self, mode: bool) -> io::Result<bool> {
+        self.output.set_raw_mode(mode)
     }
 
     fn is_raw_mode(&self) -> bool {

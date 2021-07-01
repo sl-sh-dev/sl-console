@@ -10,16 +10,9 @@
 //!     println!("{}Back again", color::Fg(color::Reset));
 //! ```
 
-use crate::console::*;
 use numtoa::NumToA;
-use std::env;
 use std::fmt;
 use std::fmt::Debug;
-use std::io::{self, Write};
-use std::time::Duration;
-
-/// The timeout of an escape code control sequence, in milliseconds.
-const CONTROL_SEQUENCE_TIMEOUT: u64 = 100;
 
 /// A terminal color.
 pub trait Color: Debug {
@@ -252,95 +245,4 @@ impl<C: Color> fmt::Display for Bg<C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.0.write_bg(f)
     }
-}
-
-/// Extension to `ConsoleRead` trait for getting available colors.
-pub trait AvailableColors {
-    /// How many ANSI colors are supported (from 8 to 256)?
-    ///
-    /// Beware: the information given isn't authoritative, it's infered through escape codes or the
-    /// value of `TERM`, more colors may be available.
-    fn available_colors(&mut self) -> io::Result<u16>;
-}
-
-impl<C: ConsoleRead> AvailableColors for C {
-    fn available_colors(&mut self) -> io::Result<u16> {
-        fn available_colors_inner(conin: &mut dyn ConsoleRead) -> io::Result<u16> {
-            if detect_color(conin, 0)? {
-                // OSC 4 is supported, detect how many colors there are.
-                // Do a binary search of the last supported color.
-                let mut min = 8;
-                let mut max = 256;
-                let mut i;
-                while min + 1 < max {
-                    i = (min + max) / 2;
-                    if detect_color(conin, i)? {
-                        min = i
-                    } else {
-                        max = i
-                    }
-                }
-                Ok(max)
-            } else {
-                // OSC 4 is not supported, trust TERM contents.
-                Ok(match env::var_os("TERM") {
-                    Some(val) => {
-                        if val.to_str().unwrap_or("").contains("256color") {
-                            256
-                        } else {
-                            8
-                        }
-                    }
-                    None => 8,
-                })
-            }
-        }
-
-        let old_blocking = self.is_blocking();
-        self.set_blocking(false);
-        let res = available_colors_inner(self);
-        self.set_blocking(old_blocking);
-        res
-    }
-}
-
-/// Detect a color using OSC 4.
-fn detect_color(conin: &mut dyn ConsoleRead, color: u16) -> io::Result<bool> {
-    let mut conout = conout_r()?;
-    // Is the color available?
-    // Use `ESC ] 4 ; color ; ? BEL`.
-    write!(conout, "\x1B]4;{};?\x07", color)?;
-    conout.flush()?;
-
-    let mut buf: [u8; 1] = [0];
-    let mut total_read = 0;
-
-    let bell = 7u8;
-    let mut retry = true;
-    let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT / 2);
-    // https://iterm2.com/documentation-escape-codes.html
-    // Either consume all data up to bell or wait for a timeout.
-    if conin.poll_timeout(timeout) {
-        while buf[0] != bell {
-            match conin.read(&mut buf) {
-                Ok(b) => total_read += b,
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
-                    // Don't error out on a would block- this just means no response since async.
-                    if retry {
-                        // read finishes and no data was returned, since this
-                        // is the first time, call poll_timeout once more to allow another
-                        // call to read.
-                        conin.poll_timeout(timeout);
-                        retry = false;
-                    } else {
-                        // if this is the second time read has finished, signal termination.
-                        buf[0] = bell;
-                    }
-                }
-                Err(err) => return Err(err),
-            }
-        }
-    }
-    // If there was a response, the color is supported.
-    Ok(total_read > 0)
 }

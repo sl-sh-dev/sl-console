@@ -1,15 +1,16 @@
 use sl_console::event::*;
+use sl_console::input::ConsoleReadExt;
 use sl_console::*;
+
 use std::io::{self, Write};
-use std::thread;
+//use std::thread;
 use std::time::Duration;
 
 fn main() {
     con_init().unwrap();
     let mut conin = conin();
-    conin.set_blocking(false); // Console to async read.
-    let mut conout = conout();
-    let _raw = conout.raw_mode_guard().unwrap();
+    let mut conout = conout().into_raw_mode().unwrap();
+    let mut blocking = false;
 
     write!(
         conout,
@@ -20,7 +21,11 @@ fn main() {
     .unwrap();
 
     loop {
-        let evt = conin.get_event();
+        let evt = if blocking {
+            conin.get_event().unwrap()
+        } else {
+            conin.get_event_timeout(Duration::from_millis(100)).unwrap()
+        };
 
         write!(conout, "{}", sl_console::clear::CurrentLine).unwrap();
         write!(conout, "\r{:?}    <- This demonstrates the async read input char. Between each update a 100 ms. is waited, simply to demonstrate the async fashion. \n\r", evt).unwrap();
@@ -28,7 +33,7 @@ fn main() {
             Ok(evt) => match evt {
                 Event::Key(key) => match key.code {
                     KeyCode::Char('q') => break,
-                    KeyCode::Char('b') => conin.set_blocking(!conin.is_blocking()),
+                    KeyCode::Char('b') => blocking = !blocking,
                     _ => {}
                 },
                 _ => {}
@@ -41,11 +46,11 @@ fn main() {
 
         conout.flush().unwrap();
 
-        thread::sleep(Duration::from_millis(50));
+        /* thread::sleep(Duration::from_millis(50));
         conout.write_all(b"# ").unwrap();
         conout.flush().unwrap();
         thread::sleep(Duration::from_millis(50));
-        conout.write_all(b"\r #").unwrap();
+        conout.write_all(b"\r #").unwrap();*/
         write!(conout, "{}", sl_console::cursor::Goto(1, 1)).unwrap();
         conout.flush().unwrap();
     }

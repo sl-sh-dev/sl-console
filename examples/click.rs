@@ -5,8 +5,7 @@ use std::io::Write; //MouseTerminal;
 
 fn main() {
     con_init().unwrap();
-    let mut console = conout();
-    let _raw = console.raw_mode_guard().unwrap();
+    let console = conout().into_raw_mode().unwrap();
     let mut console = MouseTerminal::from(console);
 
     write!(

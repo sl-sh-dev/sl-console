@@ -19,6 +19,8 @@ mod sys;
 mod sys;
 
 pub use console::{con_init, conin, conout, ConsoleRead, ConsoleWrite};
+pub use input::ConsoleReadExt;
+pub use raw::RawModeExt;
 pub use sys::size::terminal_size;
 #[cfg(unix)]
 pub use sys::size::terminal_size_pixels;
@@ -32,7 +34,7 @@ pub mod console;
 pub mod cursor;
 pub mod event;
 pub mod input;
-//pub mod raw;
+pub mod raw;
 pub mod screen;
 pub mod scroll;
 pub mod style;
