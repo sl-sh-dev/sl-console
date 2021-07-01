@@ -558,7 +558,11 @@ mod test {
     #[test]
     fn test_async_stdin() {
         let mut tty = conin_r().unwrap();
-        if let Some(Err(err)) = tty.get_event_and_raw(Some(Duration::from_millis(10))) {
+        let mut ev = tty.get_event_and_raw(Some(Duration::from_millis(10)));
+        while let Some(Ok(_)) = ev {
+            ev = tty.get_event_and_raw(Some(Duration::from_millis(10)));
+        }
+        if let Some(Err(err)) = ev {
             assert!(err.kind() == io::ErrorKind::WouldBlock);
         } else {
             panic!("Should have returned WouldBlock!");
