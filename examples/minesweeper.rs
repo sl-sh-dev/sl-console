@@ -27,6 +27,7 @@ SOFTWARE.
 */
 
 use sl_console::color::*;
+use sl_console::cursor::*;
 use sl_console::event::*;
 use sl_console::input::*;
 use sl_console::*;
@@ -185,7 +186,7 @@ struct Game<R: ConsoleRead, W: Write> {
 /// Initialize the game.
 fn init(difficulty: u8, w: u16, h: u16, rand_seed: u64) {
     // Get and lock the console out.
-    let mut conout = conout().lock();
+    let mut conout = HideCursor::from(conout().lock());
     // Use the mouse.  Drop for Game will turn it back off in the terminal.
     conout.mouse_on().expect("Failed to turn on mouse support!");
     // Let's go to raw mode.  Not using the guard, Game will turn off raw mode

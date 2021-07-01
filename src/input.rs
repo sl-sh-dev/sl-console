@@ -280,10 +280,16 @@ mod test {
             LEFTOVER.with(|leftover| event_and_raw(self, &mut leftover.borrow_mut()))
         }
 
-        fn poll(&mut self) {}
-
-        fn poll_timeout(&mut self, _timeout: Duration) -> bool {
+        fn poll(&mut self, _timeout: Option<Duration>) -> bool {
             self.len() > 0
+        }
+
+        fn read_timeout(
+            &mut self,
+            buf: &mut [u8],
+            _timeout: Option<Duration>,
+        ) -> io::Result<usize> {
+            self.read(buf)
         }
     }
 

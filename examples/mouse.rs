@@ -1,4 +1,4 @@
-use sl_console::cursor::{self, CursorPos};
+use sl_console::cursor::{self, cursor_pos};
 use sl_console::event::*;
 use sl_console::input::*;
 use sl_console::*;
@@ -18,9 +18,7 @@ fn main() {
     )
     .unwrap();
 
-    let mut conin = conin();
-    for c in conin.lock().events() {
-        //let c = conin.get_event();
+    for c in conin().lock().events() {
         let evt = c.unwrap();
         match evt {
             Event::Key(key) => match key.code {
@@ -30,7 +28,7 @@ fn main() {
             Event::Mouse(me) => match me {
                 MouseEvent::Press(_, a, b) | MouseEvent::Release(a, b) | MouseEvent::Hold(a, b) => {
                     write!(console, "{}", cursor::Goto(a, b)).unwrap();
-                    let (x, y) = conin.cursor_pos().unwrap();
+                    let (x, y) = cursor_pos().unwrap();
                     write!(
                         console,
                         "{}{}Cursor is at: ({},{}){}",

@@ -9,7 +9,7 @@
 //!
 //! The con_init() function should be called once (it is safe to call multiple
 //! times) and if it returns an error then no tty/console is available.  If
-//! con_init() fails then calls to conin()/conout() will panic.  It is safe to
+//! con_init() fails then calls to conin()/conout() will panic.  It is ok to
 //! call conin_r()/conout_r() but you will have to deal with the error and
 //! conin()/conout() will always work if con_init() was successful.
 
@@ -55,8 +55,8 @@ lazy_static! {
 /// to call multiple times and should always be called before conin()/conout()
 /// for the first time.  Do NOT call conin()/conout() if it returns an error,
 /// they will panic if the console is in an error state (note they should always
-/// work if coninit() returns Ok).  It is safe to call conin_r()/conout_r()
-/// even if coninit() is not used- they return a result so will not panic.
+/// work if con_init() returns Ok).  It is ok to call conin_r()/conout_r()
+/// even if con_init() is not used- they return a result so will not panic.
 pub fn con_init() -> io::Result<()> {
     if let Err(err) = &*CONSOLE_IN {
         return Err(io::Error::new(err.kind(), err));
@@ -169,17 +169,20 @@ pub trait ConsoleRead: Read {
         timeout: Option<Duration>,
     ) -> Option<io::Result<(Event, Vec<u8>)>>;
 
-    /// Return when more data is avialable.
+    /// Return when more data is avialable or timeout is reached.
+    /// If timeout is None will poll until data is available.
+    /// Returns true if more data was ready, false if timed out.
     ///
-    /// Calls to a get_* function should return a value now.
+    /// Calls to a get_* function or read should return data now.
     /// Assume this can be interupted.
-    fn poll(&mut self);
+    fn poll(&mut self, timeout: Option<Duration>) -> bool;
 
-    /// Return more data is ready or the timeout is reached.
-    ///
-    /// Assume this can be interupted.
-    /// Returns true if the more data was ready, false if timed out.
-    fn poll_timeout(&mut self, timeout: Duration) -> bool;
+    /// Read data (like read) but with an optional timeout.
+    /// If timeout is None then block until there is something to read.  If
+    /// timeout is a value then return after the timeout if nothing is available
+    /// to read.
+    /// Returns a Err of kind WouldBlock if it times out.
+    fn read_timeout(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<usize>;
 }
 
 /// Represents the input side of the tty/console terminal.
@@ -220,12 +223,12 @@ impl ConsoleRead for Conin {
         self.lock().get_event_and_raw(timeout)
     }
 
-    fn poll(&mut self) {
-        self.lock().poll();
+    fn poll(&mut self, timeout: Option<Duration>) -> bool {
+        self.lock().poll(timeout)
     }
 
-    fn poll_timeout(&mut self, timeout: Duration) -> bool {
-        self.lock().poll_timeout(timeout)
+    fn read_timeout(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<usize> {
+        self.lock().read_timeout(buf, timeout)
     }
 }
 
@@ -338,12 +341,28 @@ impl ConsoleRead for ConsoleIn {
         event_and_raw(&mut *guard, &mut leftover)
     }
 
-    fn poll(&mut self) {
-        self.syscon.poll();
+    fn poll(&mut self, timeout: Option<Duration>) -> bool {
+        if let Some(timeout) = timeout {
+            self.syscon.poll_timeout(timeout)
+        } else {
+            self.syscon.poll();
+            true
+        }
     }
 
-    fn poll_timeout(&mut self, timeout: Duration) -> bool {
-        self.syscon.poll_timeout(timeout)
+    fn read_timeout(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<usize> {
+        if let Some(timeout) = timeout {
+            if self.poll(Some(timeout)) {
+                self.syscon.read(buf)
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    "Timed out on console read.",
+                ))
+            }
+        } else {
+            self.syscon.read_block(buf)
+        }
     }
 }
 
@@ -354,7 +373,7 @@ impl Read for ConsoleIn {
         } else {
             let mut do_read = true;
             if let Some(timeout) = self.read_timeout {
-                do_read = self.poll_timeout(timeout);
+                do_read = self.poll(Some(timeout));
             }
             if do_read {
                 // Assume we may be reading an CSI or something so allow a small
@@ -380,12 +399,12 @@ impl<'a> ConsoleRead for ConsoleInLock<'a> {
         self.inner.borrow_mut().get_event_and_raw(timeout)
     }
 
-    fn poll(&mut self) {
-        self.inner.borrow_mut().poll();
+    fn poll(&mut self, timeout: Option<Duration>) -> bool {
+        self.inner.borrow_mut().poll(timeout)
     }
 
-    fn poll_timeout(&mut self, timeout: Duration) -> bool {
-        self.inner.borrow_mut().poll_timeout(timeout)
+    fn read_timeout(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<usize> {
+        self.inner.borrow_mut().read_timeout(buf, timeout)
     }
 }
 

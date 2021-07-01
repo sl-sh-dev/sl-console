@@ -5,7 +5,7 @@ use numtoa::NumToA;
 use std::fmt;
 use std::io::{self, Error, ErrorKind, Write};
 use std::ops;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// The timeout of an escape code control sequence, in milliseconds.
 const CONTROL_SEQUENCE_TIMEOUT: u64 = 100;
@@ -158,88 +158,84 @@ impl fmt::Display for Down {
     }
 }
 
-/// Extension to `Console` trait for getting current cursor position.
-pub trait CursorPos {
-    /// Get the (1,1)-based cursor position from the terminal.
-    fn cursor_pos(&mut self) -> io::Result<(u16, u16)>;
+/// Move the cursor to (x, y).
+///
+/// This a convience wrapper.
+pub fn goto(x: u16, y: u16) -> io::Result<()> {
+    let mut conout = conout_r()?.lock();
+    write!(conout, "{}", Goto(x, y))?;
+    conout.flush()?;
+    Ok(())
 }
 
-impl<C: ConsoleRead> CursorPos for C {
-    fn cursor_pos(&mut self) -> io::Result<(u16, u16)> {
-        let delimiter = b'R';
+/// Return the current cursor position.
+pub fn cursor_pos() -> io::Result<(u16, u16)> {
+    let delimiter = b'R';
 
-        let mut conout = conout_r()?;
+    {
+        let mut conout = conout_r()?.lock();
         // Where is the cursor?
         // Use `ESC [ 6 n`.
         write!(conout, "\x1B[6n")?;
         conout.flush()?;
-
-        let mut buf: [u8; 1] = [0];
-        let mut read_chars = Vec::new();
-
-        let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT / 2);
-        let mut retry = true;
-        // XXX This is potentially broken but Price is going to read this as events so going
-        // away soon.
-        if self.poll_timeout(timeout) {
-            while buf[0] != delimiter {
-                match self.read(&mut buf) {
-                    Ok(b) if b > 0 => {
-                        read_chars.push(buf[0]);
-                    }
-                    Ok(_) => {}
-                    Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
-                        // Don't error out on a would block- this just means no response since async.
-                        if retry {
-                            // read finishes and no data was returned, since this
-                            // is the first time, call poll_timeout once more to allow another
-                            // call to read.
-                            self.poll_timeout(timeout);
-                            retry = false;
-                        } else {
-                            // if this is the second time read has finished, signal termination.
-                            buf[0] = delimiter;
-                        }
-                    }
-                    Err(err) => return Err(err),
-                }
-            }
-        }
-
-        if !read_chars.is_empty() {
-            // The answer will look like `ESC [ Cy ; Cx R`.
-            read_chars.pop(); // remove trailing R.
-            if let Ok(read_str) = String::from_utf8(read_chars) {
-                if let Some(beg) = read_str.rfind('[') {
-                    let coords: String = read_str.chars().skip(beg + 1).collect();
-                    let mut nums = coords.split(';');
-                    if let (Some(cy), Some(cx)) = (nums.next(), nums.next()) {
-                        if let (Ok(cy), Ok(cx)) = (cy.parse::<u16>(), cx.parse::<u16>()) {
-                            return Ok((cx, cy));
-                        }
-                    }
-                }
-            }
-            return Err(Error::new(
-                ErrorKind::Other,
-                "Failed to parse coords from chars read from console.",
-            ));
-        }
-        Err(Error::new(
-            ErrorKind::Other,
-            "Cursor position detection timed out.",
-        ))
     }
+
+    let mut conin = conin_r()?.lock();
+    let mut buf: [u8; 1] = [0];
+    let mut read_chars = Vec::new();
+
+    let timeout = Duration::from_millis(CONTROL_SEQUENCE_TIMEOUT);
+    let now = Instant::now();
+    while buf[0] != delimiter && now.elapsed() < timeout {
+        match conin.read_timeout(&mut buf, Some(timeout - now.elapsed())) {
+            Ok(1) => {
+                read_chars.push(buf[0]);
+            }
+            Ok(0) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "Unexpected EOF.",
+                ));
+            }
+            Ok(_) => {}
+            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+            Err(err) => return Err(err),
+        }
+    }
+
+    if read_chars.pop().unwrap_or(b'\0') == delimiter && !read_chars.is_empty() {
+        // The answer will look like `ESC [ Cy ; Cx R`.
+        // The pop in the if removes and verifies the delimiter
+        if let Ok(read_str) = String::from_utf8(read_chars) {
+            if let Some(beg) = read_str.rfind('[') {
+                let coords: String = read_str.chars().skip(beg + 1).collect();
+                let mut nums = coords.split(';');
+                if let (Some(cy), Some(cx)) = (nums.next(), nums.next()) {
+                    if let (Ok(cy), Ok(cx)) = (cy.parse::<u16>(), cx.parse::<u16>()) {
+                        return Ok((cx, cy));
+                    }
+                }
+            }
+        }
+        return Err(Error::new(
+            ErrorKind::Other,
+            "Failed to parse coords from chars read from console.",
+        ));
+    }
+    Err(Error::new(
+        ErrorKind::Other,
+        "Cursor position detection timed out.",
+    ))
 }
 
 /// Hide the cursor for the lifetime of this struct.
 /// It will hide the cursor on creation with from() and show it back on drop().
-pub struct HideCursor<W: Write> {
+pub struct HideCursor<W: ConsoleWrite> {
     /// The output target.
     output: W,
 }
 
-impl<W: Write> HideCursor<W> {
+impl<W: ConsoleWrite> HideCursor<W> {
     /// Create a hide cursor wrapper struct for the provided output and hides the cursor.
     pub fn from(mut output: W) -> Self {
         write!(output, "{}", Hide).expect("hide the cursor");
@@ -247,13 +243,13 @@ impl<W: Write> HideCursor<W> {
     }
 }
 
-impl<W: Write> Drop for HideCursor<W> {
+impl<W: ConsoleWrite> Drop for HideCursor<W> {
     fn drop(&mut self) {
         write!(self, "{}", Show).expect("show the cursor");
     }
 }
 
-impl<W: Write> ops::Deref for HideCursor<W> {
+impl<W: ConsoleWrite> ops::Deref for HideCursor<W> {
     type Target = W;
 
     fn deref(&self) -> &W {
@@ -261,13 +257,13 @@ impl<W: Write> ops::Deref for HideCursor<W> {
     }
 }
 
-impl<W: Write> ops::DerefMut for HideCursor<W> {
+impl<W: ConsoleWrite> ops::DerefMut for HideCursor<W> {
     fn deref_mut(&mut self) -> &mut W {
         &mut self.output
     }
 }
 
-impl<W: Write> Write for HideCursor<W> {
+impl<W: ConsoleWrite> Write for HideCursor<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.output.write(buf)
     }
@@ -277,19 +273,12 @@ impl<W: Write> Write for HideCursor<W> {
     }
 }
 
-/// Return the current cursor position.
-///
-/// This is convience wrapper.
-pub fn cursor_pos() -> io::Result<(u16, u16)> {
-    conin_r()?.cursor_pos()
-}
+impl<W: ConsoleWrite> ConsoleWrite for HideCursor<W> {
+    fn set_raw_mode(&mut self, mode: bool) -> io::Result<bool> {
+        self.output.set_raw_mode(mode)
+    }
 
-/// Move the cursor to (x, y).
-///
-/// This a convience wrapper.
-pub fn goto(x: u16, y: u16) -> io::Result<()> {
-    let mut conout = conout_r()?.lock();
-    write!(conout, "{}", Goto(x, y))?;
-    conout.flush()?;
-    Ok(())
+    fn is_raw_mode(&self) -> bool {
+        self.output.is_raw_mode()
+    }
 }
