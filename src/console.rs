@@ -338,7 +338,9 @@ impl ConsoleRead for ConsoleIn {
             s.blocking = old_block;
             s.read_timeout = old_timeout;
         });
-        event_and_raw(&mut *guard, &mut leftover)
+        let res = event_and_raw(&mut *guard, &mut leftover);
+        guard.leftover = leftover;
+        res
     }
 
     fn poll(&mut self, timeout: Option<Duration>) -> bool {
