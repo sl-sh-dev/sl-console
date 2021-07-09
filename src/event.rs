@@ -165,7 +165,7 @@ where
         I: Iterator<Item = io::Result<u8>>,
     {
         match item {
-            b'\x1B' => {
+            b'\x1B' | b'\x9B' => {
                 // This is an escape character, leading a control sequence.
                 Ok(match iter.next() {
                     Some(Ok(b'O')) => {
