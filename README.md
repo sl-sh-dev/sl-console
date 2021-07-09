@@ -1,3 +1,6 @@
+# sl-console ![Rust](https://github.com/sl-sh-dev/sl-console/workflows/Rust/badge.svg?branch=master)
+
+A Rust library offering readline-like functionality.
 This is a fork of termion (https://gitlab.redox-os.org/redox-os/termion).
 It adds window support (for 10 with new console ansi code support) based on
 Jezza's MR (https://gitlab.redox-os.org/redox-os/termion/-/merge_requests/151).
