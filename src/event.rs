@@ -242,34 +242,9 @@ where
     };
 
     match result {
-        Ok(event) => {
-            if let Ok(control_str) = String::from_utf8(control_seq.clone()) {
-                log::trace!(
-                    "key: {:?}, dec: {:?}, ascii: {:?}.\n",
-                    event,
-                    control_seq,
-                    control_str
-                );
-            } else {
-                log::trace!(
-                    "key: {:?}, dec: {:?}, ascii: [failed to parse]\n",
-                    event,
-                    control_seq
-                )
-            }
-            Ok(event)
-        }
+        Ok(event) => Ok(event),
         Err(error) => {
-            let control_str = match String::from_utf8(control_seq.clone()) {
-                Ok(str) => str,
-                Err(_) => String::from(""),
-            };
-            log::warn!(
-                "Failed to parse event: {}. Buffer: {:?}, {:?}.",
-                error,
-                control_seq,
-                control_str
-            );
+            log::error!("Failed to parse event: {}", error);
             Ok(Event::Unsupported(control_seq))
         }
     }
@@ -563,6 +538,43 @@ where
                             ErrorKind::Other,
                             "Failed to parse csi code ~ from buffer",
                         ));
+                    }
+                    b'u' => {
+                        // libtermkey/libtickit specification: http://www.leonerd.org.uk/hacks/fixterms/
+                        if let Ok(str_buf) = String::from_utf8(buf) {
+                            // This libtermkey sequence can be a list of semicolon-separated
+                            // numbers.
+                            log::trace!("look what I found: {:?}.", str_buf);
+                            let mut nums: Vec<u8> = vec![];
+                            for i in str_buf.split(';') {
+                                if let Ok(c) = i.parse::<u8>() {
+                                    nums.push(c);
+                                }
+                            }
+                            let event =
+                                match nums.len() {
+                                    0 => return Err(Error::new(
+                                        ErrorKind::Other,
+                                        "Failed to parse libtermkey escape code, buffer is empty",
+                                    )),
+                                    1 => Event::Unsupported(nums),
+                                    2 => {
+                                        let key_code = KeyCode::Char(nums[0] as char);
+                                        if let Some(mods) = parse_key_mods(nums[1]) {
+                                            Event::Key(Key::new_mod(key_code, mods))
+                                        } else {
+                                            Event::Unsupported(nums)
+                                        }
+                                    }
+                                    _ => Event::Unsupported(nums),
+                                };
+                            return Ok(event);
+                        } else {
+                            return Err(Error::new(
+                                ErrorKind::Other,
+                                "Failed to parse libtermkey escape code",
+                            ));
+                        }
                     }
                     val => {
                         if let Some(key_code) = parse_other_special_key_code(val) {
