@@ -205,7 +205,9 @@ where
                                 KeyCode::Char((ch as u8 - 0x1 + b'a') as char),
                                 KeyMod::AltCtrl,
                             )),
-                            _ => Event::Key(Key::new_mod(parse_key_codes(c), KeyMod::Alt)),
+                            _ => {
+                                Event::Key(Key::new_mod(parse_libtickit_key_codes(c), KeyMod::Alt))
+                            }
                         }
                     }
                     Some(Err(_)) | None => {
@@ -297,7 +299,7 @@ fn parse_other_special_key_code(code: u8) -> Option<KeyCode> {
     Some(code)
 }
 
-fn parse_key_codes(code: u8) -> KeyCode {
+fn parse_libtickit_key_codes(code: u8) -> KeyCode {
     match code {
         27 => KeyCode::Esc,
         127 => KeyCode::Backspace,
@@ -568,7 +570,7 @@ where
                                     )),
                                     1 => Event::Unsupported(nums),
                                     2 => {
-                                        let key_code = parse_key_codes(nums[0]);
+                                        let key_code = parse_libtickit_key_codes(nums[0]);
                                         if let Some(mods) = parse_key_mods(nums[1]) {
                                             Event::Key(Key::new_mod(key_code, mods))
                                         } else {
@@ -1090,10 +1092,38 @@ mod test {
         }
 
         for csi in csi_sequences.iter() {
+            let item = csi;
+            let mut map = HashMap::new();
+            for (mod_str, mods) in mod_map.iter() {
+                for (letter_str, code) in upper_letters.iter() {
+                    let str = format!("[{};{}u", letter_str, mod_str);
+                    map.insert(str, Event::Key(Key::new_mod(*code, *mods)));
+                }
+            }
+            test_parse_event_dynamic(*item, &mut map);
+        }
+    }
+
+    #[test]
+    fn test_parse_libtickit_special() {
+        let csi_sequences = vec![b'\x1b', b'\x9b'];
+        let mod_map = HashMap::<_, _>::from_iter(IntoIter::new([
+            ("2", KeyMod::Shift),
+            ("3", KeyMod::Alt),
+            ("4", KeyMod::AltShift),
+            ("5", KeyMod::Ctrl),
+            ("6", KeyMod::CtrlShift),
+            ("7", KeyMod::AltCtrl),
+            ("8", KeyMod::AltCtrlShift),
+        ]));
+        let mut special_key_codes = HashMap::new();
+        special_key_codes.insert("27", KeyCode::Esc);
+        special_key_codes.insert("127", KeyCode::Backspace);
+        for csi in csi_sequences.iter() {
             let mut map = HashMap::new();
             let item = csi;
             for (mod_str, mods) in mod_map.iter() {
-                for (letter_str, code) in upper_letters.iter() {
+                for (letter_str, code) in special_key_codes.iter() {
                     let str = format!("[{};{}u", letter_str, mod_str);
                     map.insert(str, Event::Key(Key::new_mod(*code, *mods)));
                 }
