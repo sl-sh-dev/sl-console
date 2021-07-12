@@ -205,7 +205,7 @@ where
                                 KeyCode::Char((ch as u8 - 0x1 + b'a') as char),
                                 KeyMod::AltCtrl,
                             )),
-                            _ => Event::Key(Key::new_mod(KeyCode::Char(ch), KeyMod::Alt)),
+                            _ => Event::Key(Key::new_mod(parse_key_codes(c), KeyMod::Alt)),
                         }
                     }
                     Some(Err(_)) | None => {
@@ -295,6 +295,14 @@ fn parse_other_special_key_code(code: u8) -> Option<KeyCode> {
         _ => return None,
     };
     Some(code)
+}
+
+fn parse_key_codes(code: u8) -> KeyCode {
+    match code {
+        27 => KeyCode::Esc,
+        127 => KeyCode::Backspace,
+        code => KeyCode::Char(code as char),
+    }
 }
 
 fn parse_key_mods(mods: u8) -> Option<KeyMod> {
@@ -540,9 +548,10 @@ where
                         ));
                     }
                     b'u' => {
-                        // libtermkey/libtickit specification: http://www.leonerd.org.uk/hacks/fixterms/
+                        // libtickit specification: http://www.leonerd.org
+                        // .uk/hacks/fixterms/
                         if let Ok(str_buf) = String::from_utf8(buf) {
-                            // This libtermkey sequence can be a list of semicolon-separated
+                            // This libtickit sequence can be a list of semicolon-separated
                             // numbers.
                             log::trace!("look what I found: {:?}.", str_buf);
                             let mut nums: Vec<u8> = vec![];
@@ -555,11 +564,11 @@ where
                                 match nums.len() {
                                     0 => return Err(Error::new(
                                         ErrorKind::Other,
-                                        "Failed to parse libtermkey escape code, buffer is empty",
+                                        "Failed to parse libtickit escape code, buffer is empty",
                                     )),
                                     1 => Event::Unsupported(nums),
                                     2 => {
-                                        let key_code = KeyCode::Char(nums[0] as char);
+                                        let key_code = parse_key_codes(nums[0]);
                                         if let Some(mods) = parse_key_mods(nums[1]) {
                                             Event::Key(Key::new_mod(key_code, mods))
                                         } else {
@@ -572,7 +581,7 @@ where
                         } else {
                             return Err(Error::new(
                                 ErrorKind::Other,
-                                "Failed to parse libtermkey escape code",
+                                "Failed to parse libtickit escape code",
                             ));
                         }
                     }
@@ -664,6 +673,13 @@ mod test {
         for c in chars {
             let b = bytes.next().unwrap().unwrap();
             assert!(c == parse_utf8_char(b, bytes).unwrap());
+        }
+    }
+
+    fn test_parse_event_dynamic(item: u8, map: &mut HashMap<String, Event>) {
+        for (key, val) in map.iter() {
+            let mut iter = key.bytes().map(|x| Ok(x));
+            assert_eq!(*val, parse_event(item, &mut iter).unwrap())
         }
     }
 
@@ -1047,7 +1063,6 @@ mod test {
                 Event::Key(Key::new_mod(KeyCode::Char('z'), KeyMod::Alt)),
             ),
         ]));
-
         let item = b'\x1B';
         test_parse_event(item, &mut map);
     }
@@ -1060,5 +1075,30 @@ mod test {
             parse_event(item, &mut iter).unwrap(),
             Event::Unsupported(vec![b'\x1B', b'[', b'x']),
         )
+    }
+
+    #[test]
+    fn test_parse_libtickit_ascii() {
+        let csi_sequences = vec![b'\x1b', b'\x9b'];
+        let mod_map = HashMap::<_, _>::from_iter(IntoIter::new([
+            ("6", KeyMod::CtrlShift),
+            ("8", KeyMod::AltCtrlShift),
+        ]));
+        let mut upper_letters = HashMap::new();
+        for n in 65..91 {
+            upper_letters.insert(format!("{}", n), KeyCode::Char((n as u8) as char));
+        }
+
+        for csi in csi_sequences.iter() {
+            let mut map = HashMap::new();
+            let item = csi;
+            for (mod_str, mods) in mod_map.iter() {
+                for (letter_str, code) in upper_letters.iter() {
+                    let str = format!("[{};{}u", letter_str, mod_str);
+                    map.insert(str, Event::Key(Key::new_mod(*code, *mods)));
+                }
+            }
+            test_parse_event_dynamic(*item, &mut map);
+        }
     }
 }
