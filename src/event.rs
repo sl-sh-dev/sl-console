@@ -550,12 +550,11 @@ where
                         ));
                     }
                     b'u' => {
-                        // libtickit specification: http://www.leonerd.org
-                        // .uk/hacks/fixterms/
+                        // libtickit specification:
+                        // http://www.leonerd.org.uk/hacks/fixterms/
                         if let Ok(str_buf) = String::from_utf8(buf) {
                             // This libtickit sequence can be a list of semicolon-separated
                             // numbers.
-                            log::trace!("look what I found: {:?}.", str_buf);
                             let mut nums: Vec<u8> = vec![];
                             for i in str_buf.split(';') {
                                 if let Ok(c) = i.parse::<u8>() {
