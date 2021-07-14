@@ -91,38 +91,12 @@ where
     I: Iterator<Item = io::Result<u8>>,
 {
     let mut buf = vec![item];
-    let result = {
-        let mut iter = iter.inspect(|byte| {
-            if let Ok(byte) = *byte {
-                buf.push(byte);
-            }
-        });
-        let event = event::parse_event(item, &mut iter);
-        match event {
-            Ok(event) => {
-                if let Ok(control_str) = String::from_utf8(buf.clone()) {
-                    log::trace!("raw: {:?}, ascii: {:?}.\n", buf.clone(), control_str,);
-                } else {
-                    log::trace!("raw: {:?}, ascii: [failed to parse]\n", buf.clone());
-                }
-                Ok(event)
-            }
-            Err(error) => {
-                let control_str = match String::from_utf8(buf.clone()) {
-                    Ok(str) => str,
-                    Err(_) => String::from(""),
-                };
-                log::warn!(
-                    "Failed to parse event: {:?}. ascii: {:?}",
-                    buf.clone(),
-                    control_str
-                );
-                Err(error)
-            }
+    let mut iter = iter.inspect(|byte| {
+        if let Ok(byte) = *byte {
+            buf.push(byte);
         }
-    };
-
-    result
+    });
+    event::parse_event(item, &mut iter)
         .or_else(|_| Ok(Event::Unsupported(buf.clone())))
         .map(|e| (e, buf))
 }
