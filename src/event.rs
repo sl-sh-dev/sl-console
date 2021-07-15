@@ -165,7 +165,12 @@ where
         I: Iterator<Item = io::Result<u8>>,
     {
         match item {
-            b'\x1B' | b'\x9B' => {
+            b'\x9B' => {
+                // proposed CSI extension mentioned at bottom of page:
+                // http://www.leonerd.org.uk/hacks/fixterms/
+                parse_csi(iter)
+            }
+            b'\x1B' => {
                 // This is an escape character, leading a control sequence.
                 Ok(match iter.next() {
                     Some(Ok(b'O')) => {
@@ -1095,7 +1100,8 @@ mod test {
             let mut map = HashMap::new();
             for (mod_str, mods) in mod_map.iter() {
                 for (letter_str, code) in upper_letters.iter() {
-                    let str = format!("[{};{}u", letter_str, mod_str);
+                    let start_seq = if *csi == b'\x9b' { "" } else { "[" };
+                    let str = format!("{}{};{}u", start_seq, letter_str, mod_str);
                     map.insert(str, Event::Key(Key::new_mod(*code, *mods)));
                 }
             }
@@ -1123,7 +1129,8 @@ mod test {
             let item = csi;
             for (mod_str, mods) in mod_map.iter() {
                 for (letter_str, code) in special_key_codes.iter() {
-                    let str = format!("[{};{}u", letter_str, mod_str);
+                    let start_seq = if *csi == b'\x9b' { "" } else { "[" };
+                    let str = format!("{}{};{}u", start_seq, letter_str, mod_str);
                     map.insert(str, Event::Key(Key::new_mod(*code, *mods)));
                 }
             }
