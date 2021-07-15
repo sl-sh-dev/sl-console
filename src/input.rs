@@ -91,15 +91,12 @@ where
     I: Iterator<Item = io::Result<u8>>,
 {
     let mut buf = vec![item];
-    let result = {
-        let mut iter = iter.inspect(|byte| {
-            if let Ok(byte) = *byte {
-                buf.push(byte);
-            }
-        });
-        event::parse_event(item, &mut iter)
-    };
-    result
+    let mut iter = iter.inspect(|byte| {
+        if let Ok(byte) = *byte {
+            buf.push(byte);
+        }
+    });
+    event::parse_event(item, &mut iter)
         .or_else(|_| Ok(Event::Unsupported(buf.clone())))
         .map(|e| (e, buf))
 }
